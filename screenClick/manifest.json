@@ -1,0 +1,73 @@
+{
+  "manifest_version": 3,
+  "name": "ScreenClick",
+  "version": "1.4.8",
+  "description": "Capture screenshots during QA: visible tab, full page, entire screen, or step-by-step process recording. Export as PDF.",
+  "permissions": [
+    "activeTab",
+    "storage",
+    "unlimitedStorage",
+    "downloads",
+    "scripting",
+    "tabs",
+    "offscreen",
+    "desktopCapture"
+  ],
+  "host_permissions": [
+    "<all_urls>"
+  ],
+  "background": {
+    "service_worker": "background/service-worker.js"
+  },
+  "action": {
+    "default_popup": "popup/popup.html",
+    "default_icon": {
+      "16": "icons/icon-16.png",
+      "48": "icons/icon-48.png",
+      "128": "icons/icon-128.png"
+    }
+  },
+  "options_page": "options/options.html",
+  "commands": {
+    "capture-screenshot": {
+      "suggested_key": {
+        "default": "Ctrl+Shift+S",
+        "mac": "Command+Shift+S"
+      },
+      "description": "Capture screenshot during recording"
+    },
+    "toggle-recording": {
+      "suggested_key": {
+        "default": "Ctrl+Shift+1",
+        "mac": "Command+Shift+1"
+      },
+      "description": "Start or stop recording (saves PDF on stop)"
+    },
+    "stop-and-save": {
+      "suggested_key": {
+        "default": "Ctrl+Shift+2",
+        "mac": "Command+Shift+2"
+      },
+      "description": "Stop recording and save PDF immediately"
+    }
+  },
+  "icons": {
+    "16": "icons/icon-16.png",
+    "48": "icons/icon-48.png",
+    "128": "icons/icon-128.png"
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content/content.js"],
+      "css": ["content/click-ring.css"],
+      "run_at": "document_idle"
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": ["lib/jspdf.umd.min.js"],
+      "matches": ["<all_urls>"]
+    }
+  ]
+}

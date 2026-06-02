@@ -1,0 +1,598 @@
+// Content script. Handles:
+//   - mouse tracking (keyboard trigger ring position)
+//   - double-click trigger (visible-tab mode)
+//   - single-click trigger and form-input trigger (process-record mode)
+//   - green click ring rendering with element label
+//   - on-page "QA RECORDING" indicator
+//   - full-page scroll orchestration for fullpage mode
+
+(function () {
+  if (window.__qaScreenshotToolLoaded) return;
+  window.__qaScreenshotToolLoaded = true;
+
+  const STATE = {
+    isRecording: false,
+    captureTarget: 'visible',
+    triggers: { doubleClick: false, keyboard: false, timer: false },
+    processTriggers: { click: true, inputChange: true, keyboard: true, timer: false },
+    processOptions: { onlyInteractive: true, debounceMs: 250 },
+    lastMouse: { x: window.innerWidth / 2, y: window.innerHeight / 2 },
+    indicator: null,
+    fp: null,
+    // Process-mode internals
+    lastClickAt: 0,
+    inputSessions: {}, // keyed by element's __qaFieldId
+    stepCounter: 0,
+  };
+
+  document.addEventListener('mousemove', (e) => {
+    STATE.lastMouse.x = e.clientX;
+    STATE.lastMouse.y = e.clientY;
+  }, { passive: true, capture: true });
+
+  async function refreshState() {
+    try {
+      const data = await chrome.storage.local.get(['isRecording', 'settings', 'captureTarget']);
+      const wasRecording = STATE.isRecording;
+      STATE.isRecording = !!data.isRecording;
+      STATE.captureTarget = data.captureTarget || 'visible';
+      const s = data.settings || {};
+      STATE.triggers = s.triggers || { doubleClick: true, keyboard: true, timer: false };
+      STATE.processTriggers = s.processTriggers || { click: true, inputChange: true, keyboard: true, timer: false };
+      STATE.processOptions = s.processOptions || { onlyInteractive: true, debounceMs: 250 };
+      if (STATE.isRecording && !wasRecording) {
+        STATE.stepCounter = 0;
+        STATE.inputSessions = {};
+        showIndicator();
+      }
+      if (!STATE.isRecording && wasRecording) {
+        // Clear any pending idle timers so they don't fire after stop.
+        for (const k in STATE.inputSessions) {
+          const sess = STATE.inputSessions[k];
+          if (sess && sess.idleTimer) clearTimeout(sess.idleTimer);
+        }
+        STATE.inputSessions = {};
+        hideIndicator();
+      }
+    } catch {}
+  }
+
+  try {
+    chrome.storage.onChanged.addListener((changes, area) => {
+      if (area === 'local' && (changes.isRecording || changes.settings || changes.captureTarget)) {
+        refreshState();
+      }
+    });
+  } catch {}
+
+  refreshState();
+
+  function showIndicator() {
+    if (STATE.indicator) return;
+    const el = document.createElement('div');
+    el.className = 'qa-recording-indicator';
+    el.textContent = STATE.captureTarget === 'process' ? 'SCREENCLICK • PROCESS' : 'SCREENCLICK • CAPTURING';
+    (document.body || document.documentElement).appendChild(el);
+    STATE.indicator = el;
+  }
+
+  function hideIndicator() {
+    if (STATE.indicator) {
+      STATE.indicator.remove();
+      STATE.indicator = null;
+    }
+  }
+
+  function drawRing(x, y) {
+    return new Promise((resolve) => {
+      const ring = document.createElement('div');
+      ring.className = 'qa-click-ring';
+      ring.style.left = x + 'px';
+      ring.style.top = y + 'px';
+      (document.body || document.documentElement).appendChild(ring);
+      ring.offsetHeight;
+      setTimeout(() => resolve(), 180);
+      setTimeout(() => ring.remove(), 1300);
+    });
+  }
+
+  async function sendMessageWithRetry(msg, attempts = 3) {
+    for (let i = 0; i < attempts; i++) {
+      try { return await chrome.runtime.sendMessage(msg); }
+      catch (e) {
+        if (i === attempts - 1) throw e;
+        await new Promise((r) => setTimeout(r, 100));
+      }
+    }
+  }
+
+  async function triggerCapture(x, y, source, extra = {}) {
+    if (!STATE.isRecording) return;
+    if (STATE.captureTarget === 'visible' || STATE.captureTarget === 'process') {
+      await drawRing(x, y);
+    }
+    try {
+      await sendMessageWithRetry({
+        type: 'CAPTURE_NOW',
+        source,
+        x,
+        y,
+        pageUrl: window.location.href,
+        ...extra,
+      });
+    } catch (e) {
+      console.warn('[QA Tool] Capture message failed:', e?.message || e);
+    }
+  }
+
+  // ---------- Visible-tab double-click ----------
+
+  document.addEventListener('dblclick', (e) => {
+    if (!STATE.isRecording || !STATE.triggers.doubleClick) return;
+    if (STATE.captureTarget !== 'visible') return;
+    triggerCapture(e.clientX, e.clientY, 'doubleClick');
+  }, true);
+
+  // ---------- Process Record: click trigger ----------
+  //
+  // We listen in the capture phase to fire before page handlers, but we do
+  // NOT preventDefault, so the user's actual click still happens (links
+  // navigate, buttons submit, etc.). Debounce prevents capturing the same
+  // click twice from a fast double-tap or from synthetic clicks.
+
+  document.addEventListener('click', (e) => {
+    if (!STATE.isRecording) return;
+    if (STATE.captureTarget !== 'process') return;
+    if (!STATE.processTriggers.click) return;
+
+    // Debounce: ignore clicks too close together.
+    const now = Date.now();
+    if (now - STATE.lastClickAt < STATE.processOptions.debounceMs) return;
+    STATE.lastClickAt = now;
+
+    // Filter to interactive elements if enabled.
+    if (STATE.processOptions.onlyInteractive && !isInteractive(e.target)) return;
+
+    // Ignore clicks on our own overlays.
+    if (e.target && e.target.closest && e.target.closest('.qa-click-ring, .qa-recording-indicator')) return;
+
+    // If input-change tracking is on AND this click landed on a text input,
+    // skip the click step — we'll capture a "Filled" step when the user
+    // leaves the field with new content. Avoids the duplicate
+    // "Clicked input: email" + "Typed in input: email" pair.
+    if (STATE.processTriggers.inputChange && isTextInput(e.target)) return;
+
+    const info = describeElement(e.target);
+    STATE.stepCounter++;
+    triggerCapture(e.clientX, e.clientY, 'process-click', {
+      stepNumber: STATE.stepCounter,
+      actionLabel: `Clicked ${info.label}`,
+      elementInfo: info,
+    });
+  }, true);
+
+  // ---------- Process Record: input fill ----------
+  //
+  // Captures filled-in form values as labeled steps. Fires on the first of:
+  //   - blur (user leaves the field)
+  //   - typing pause (no input for INPUT_IDLE_MS)
+  //   - Enter key inside the field
+  // De-dupes so re-focusing the same field without further changes does
+  // not produce a duplicate step.
+
+  const INPUT_IDLE_MS = 1200;
+
+  function fieldKey(el) {
+    // Stable-enough identity for the active session. We use a property on
+    // the element itself to avoid hashing.
+    if (!el.__qaFieldId) el.__qaFieldId = '_qa_' + Math.random().toString(36).slice(2, 10);
+    return el.__qaFieldId;
+  }
+
+  function captureInputFill(el, reason) {
+    if (!el) return;
+    const key = fieldKey(el);
+    const session = STATE.inputSessions[key];
+    if (!session) return;
+    const finalValue = el.value || '';
+    if (finalValue === session.initial) return;     // no real change
+    if (finalValue === session.lastCaptured) return; // already captured this exact value
+
+    session.lastCaptured = finalValue;
+    if (session.idleTimer) {
+      clearTimeout(session.idleTimer);
+      session.idleTimer = null;
+    }
+
+    const info = describeElement(el);
+    STATE.stepCounter++;
+    const rect = el.getBoundingClientRect();
+    const cx = rect.left + rect.width / 2;
+    const cy = rect.top + rect.height / 2;
+
+    // Mask sensitive fields. For type=password we still capture the action
+    // but redact the value. Don't include the actual characters.
+    const isPassword = el.tagName === 'INPUT' && (el.getAttribute('type') || '').toLowerCase() === 'password';
+    const preview = isPassword
+      ? '\u2022'.repeat(Math.min(8, finalValue.length))
+      : (finalValue.length > 60 ? finalValue.slice(0, 60) + '...' : finalValue);
+
+    const fieldName = info.text || info.label.replace(/^(input|text area|dropdown|button):\s*/, '') || 'field';
+
+    triggerCapture(cx, cy, 'process-input', {
+      stepNumber: STATE.stepCounter,
+      actionLabel: `Filled "${fieldName}" with: ${preview}`,
+      elementInfo: info,
+    });
+  }
+
+  document.addEventListener('focusin', (e) => {
+    if (!STATE.isRecording || STATE.captureTarget !== 'process') return;
+    if (!STATE.processTriggers.inputChange) return;
+    const el = e.target;
+    if (!isTextInput(el)) return;
+    const key = fieldKey(el);
+    // Preserve last-captured if user comes back to the same field.
+    const prior = STATE.inputSessions[key];
+    STATE.inputSessions[key] = {
+      el,
+      initial: el.value || '',
+      lastCaptured: prior ? prior.lastCaptured : null,
+      idleTimer: null,
+    };
+  }, true);
+
+  document.addEventListener('input', (e) => {
+    if (!STATE.isRecording || STATE.captureTarget !== 'process') return;
+    if (!STATE.processTriggers.inputChange) return;
+    const el = e.target;
+    if (!isTextInput(el)) return;
+    const key = fieldKey(el);
+    let session = STATE.inputSessions[key];
+    // If user types without focusin firing (rare; programmatic), bootstrap.
+    if (!session) {
+      session = STATE.inputSessions[key] = { el, initial: '', lastCaptured: null, idleTimer: null };
+    }
+    if (session.idleTimer) clearTimeout(session.idleTimer);
+    session.idleTimer = setTimeout(() => {
+      session.idleTimer = null;
+      captureInputFill(el, 'idle');
+    }, INPUT_IDLE_MS);
+  }, true);
+
+  document.addEventListener('focusout', (e) => {
+    if (!STATE.isRecording || STATE.captureTarget !== 'process') return;
+    if (!STATE.processTriggers.inputChange) return;
+    const el = e.target;
+    if (!isTextInput(el)) return;
+    captureInputFill(el, 'blur');
+  }, true);
+
+  document.addEventListener('keydown', (e) => {
+    if (!STATE.isRecording || STATE.captureTarget !== 'process') return;
+    if (!STATE.processTriggers.inputChange) return;
+    if (e.key !== 'Enter') return;
+    const el = e.target;
+    if (!isTextInput(el)) return;
+    captureInputFill(el, 'enter');
+  }, true);
+
+  // ---------- Element identification ----------
+
+  function isInteractive(el) {
+    if (!el || el.nodeType !== 1) return false;
+    if (el.disabled) return false;
+    const tag = el.tagName;
+    if (tag === 'A' || tag === 'BUTTON' || tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA' || tag === 'LABEL' || tag === 'SUMMARY') return true;
+    const role = el.getAttribute('role');
+    if (role && /^(button|link|checkbox|radio|tab|menuitem|switch|option)$/i.test(role.trim().split(/\s+/)[0])) return true;
+    if (el.hasAttribute('onclick')) return true;
+    const tabidx = el.getAttribute('tabindex');
+    // tabindex="-1" means programmatically focusable but not user-tabbable; many
+    // decorative wrappers use it. Only treat positive/zero as a strong signal.
+    if (tabidx && parseInt(tabidx, 10) >= 0) return true;
+    // Bubble up: a span inside a button should still count.
+    if (el.parentElement) return isInteractive(el.parentElement);
+    return false;
+  }
+
+  function isTextInput(el) {
+    if (!el || el.nodeType !== 1) return false;
+    if (el.tagName === 'TEXTAREA') return true;
+    if (el.tagName === 'INPUT') {
+      const t = (el.getAttribute('type') || 'text').toLowerCase();
+      return ['text', 'email', 'search', 'tel', 'url', 'password', 'number'].includes(t);
+    }
+    if (el.isContentEditable) return true;
+    return false;
+  }
+
+  // ARIA roles that mean "no semantics, decorative only". Never use these
+  // as the element's kind label.
+  const NULL_ROLES = new Set(['presentation', 'none']);
+
+  // ARIA roles that map to a friendlier kind label.
+  const ROLE_KIND_MAP = {
+    button: 'button',
+    link: 'link',
+    checkbox: 'checkbox',
+    radio: 'radio',
+    switch: 'switch',
+    tab: 'tab',
+    menuitem: 'menu item',
+    menuitemcheckbox: 'menu item',
+    menuitemradio: 'menu item',
+    option: 'option',
+    combobox: 'dropdown',
+    listbox: 'dropdown',
+    searchbox: 'search box',
+    textbox: 'input',
+    treeitem: 'tree item',
+  };
+
+  function effectiveRole(el) {
+    const r = el.getAttribute('role');
+    if (!r) return null;
+    const role = r.trim().toLowerCase().split(/\s+/)[0]; // ARIA allows space-separated list; take first
+    if (NULL_ROLES.has(role)) return null;
+    return role;
+  }
+
+  // Walk up looking for a label association: a wrapping <label>, or any
+  // ancestor with aria-labelledby pointing at a node we can read.
+  function findAssociatedLabel(el) {
+    let cur = el;
+    while (cur && cur !== document.body) {
+      // <label> wrapping us
+      if (cur.tagName === 'LABEL') {
+        const txt = (cur.textContent || '').trim().replace(/\s+/g, ' ');
+        if (txt) return txt;
+      }
+      // aria-labelledby on us or an ancestor
+      const lbId = cur.getAttribute && cur.getAttribute('aria-labelledby');
+      if (lbId) {
+        const parts = lbId.split(/\s+/).map(id => {
+          const ref = document.getElementById(id);
+          return ref ? (ref.textContent || '').trim() : '';
+        }).filter(Boolean);
+        if (parts.length) return parts.join(' ').replace(/\s+/g, ' ');
+      }
+      cur = cur.parentElement;
+    }
+    // <label for="id"> elsewhere in the doc pointing at this element
+    if (el.id) {
+      const safeId = (typeof CSS !== 'undefined' && CSS.escape)
+        ? CSS.escape(el.id)
+        : el.id.replace(/([!"#$%&'()*+,./:;<=>?@\[\\\]^`{|}~])/g, '\\$1');
+      const labelFor = document.querySelector(`label[for="${safeId}"]`);
+      if (labelFor) {
+        const txt = (labelFor.textContent || '').trim().replace(/\s+/g, ' ');
+        if (txt) return txt;
+      }
+    }
+    return '';
+  }
+
+  // Some UIs render the real <input type="checkbox"> as visually hidden and
+  // put a clickable <div> next to it. When the click lands on the decorative
+  // div, look for an associated real input via its label or its parent.
+  function findHiddenCheckboxNear(el) {
+    let cur = el;
+    while (cur && cur !== document.body) {
+      // A wrapping <label> often contains the real input
+      if (cur.tagName === 'LABEL') {
+        const inp = cur.querySelector('input[type="checkbox"], input[type="radio"]');
+        if (inp) return inp;
+      }
+      cur = cur.parentElement;
+    }
+    return null;
+  }
+
+  function describeElement(el) {
+    if (!el || el.nodeType !== 1) return { label: 'element' };
+
+    // Original element kept for fallback. We try a series of strategies to
+    // find a meaningful target.
+    let target = el;
+
+    if (STATE.processOptions.onlyInteractive) {
+      // Strategy 1: bubble up through ancestors looking for an interactive
+      // element with a *meaningful* role/tag (skip presentation/none).
+      let cur = el;
+      while (cur && cur !== document.body) {
+        if (isInteractive(cur)) {
+          const role = effectiveRole(cur);
+          // Accept the element only if its role is meaningful, or if its
+          // tag is intrinsically interactive (a, button, input, ...).
+          const intrinsicTag = ['A', 'BUTTON', 'INPUT', 'SELECT', 'TEXTAREA', 'LABEL', 'SUMMARY'].includes(cur.tagName);
+          if (role || intrinsicTag) {
+            if (cur.tagName !== el.tagName || cur !== el) { target = cur; break; }
+          }
+        }
+        cur = cur.parentElement;
+      }
+
+      // Strategy 2: if we landed on a <label>, prefer the input it wraps —
+      // testers care about the control, not the wrapper.
+      if (target.tagName === 'LABEL') {
+        const inner = target.querySelector('input[type="checkbox"], input[type="radio"], input, select, textarea, button');
+        if (inner) target = inner;
+      }
+
+      // Strategy 3: if we still didn't find anything better and the click
+      // landed on a non-interactive element, look for an associated hidden
+      // checkbox/radio (common pattern in styled forms).
+      if (target === el && !isInteractive(el)) {
+        const hidden = findHiddenCheckboxNear(el);
+        if (hidden) target = hidden;
+      }
+    }
+
+    const tag = target.tagName.toLowerCase();
+    const role = effectiveRole(target);
+    const aria = (target.getAttribute('aria-label') || '').trim();
+    const title = (target.getAttribute('title') || '').trim();
+    const placeholder = (target.getAttribute('placeholder') || '').trim();
+    const name = (target.getAttribute('name') || '').trim();
+    let text = (target.innerText || target.textContent || '').trim().replace(/\s+/g, ' ');
+    const value = target.value || '';
+
+    // If the target is a control with no visible text (e.g. hidden checkbox),
+    // borrow the text from the associated label.
+    if (!text || tag === 'input') {
+      const labelText = findAssociatedLabel(target);
+      if (labelText) text = labelText;
+    }
+
+    // Prefer the most specific human-readable label.
+    const preferred = aria || title || (text && text.length <= 60 ? text : '') || placeholder || (text ? text.slice(0, 60) + '...' : '') || name || value || '';
+
+    // Categorize the action by tag, then by role. Decorative roles already
+    // filtered out by effectiveRole.
+    let kind = 'element';
+    if (tag === 'a' || role === 'link') kind = 'link';
+    else if (tag === 'button' || role === 'button') kind = 'button';
+    else if (tag === 'input') {
+      const t = (target.getAttribute('type') || 'text').toLowerCase();
+      if (t === 'checkbox' || t === 'radio') kind = t;
+      else if (['submit', 'button', 'reset'].includes(t)) kind = 'button';
+      else kind = 'input';
+    }
+    else if (tag === 'select') kind = 'dropdown';
+    else if (tag === 'textarea') kind = 'text area';
+    else if (tag === 'label') kind = 'label';
+    else if (role && ROLE_KIND_MAP[role]) kind = ROLE_KIND_MAP[role];
+    else if (role) kind = role; // unknown but meaningful role
+
+    const label = preferred ? `${kind}: ${preferred}` : kind;
+
+    return {
+      label,
+      kind,
+      text: preferred,
+      tag,
+    };
+  }
+
+  // ---------- Full-page orchestration ----------
+
+  function fullpageBegin() {
+    const originalScrollY = window.scrollY || window.pageYOffset;
+    const hiddenEls = [];
+    if (STATE.indicator) STATE.indicator.style.display = 'none';
+    try {
+      const all = document.body ? document.body.querySelectorAll('*') : [];
+      for (const el of all) {
+        const pos = getComputedStyle(el).position;
+        if (pos === 'fixed' || pos === 'sticky') {
+          hiddenEls.push({ el, display: el.style.display });
+          el.style.display = 'none';
+        }
+      }
+    } catch (e) {
+      console.warn('[QA Tool] sticky element scan failed:', e);
+    }
+    const htmlOverflow = document.documentElement.style.overflow;
+    const bodyOverflow = document.body ? document.body.style.overflow : '';
+    document.documentElement.style.overflow = 'visible';
+    if (document.body) document.body.style.overflow = 'visible';
+    STATE.fp = { originalScrollY, hiddenEls, htmlOverflow, bodyOverflow };
+    window.scrollTo(0, 0);
+    const totalHeight = Math.max(
+      document.documentElement.scrollHeight,
+      document.body ? document.body.scrollHeight : 0
+    );
+    return {
+      ok: true,
+      totalHeight,
+      viewportHeight: window.innerHeight,
+      devicePixelRatio: window.devicePixelRatio || 1,
+    };
+  }
+
+  function fullpageScrollTo(index) {
+    if (!STATE.fp) return { ok: false, error: 'fullpage session not begun' };
+    const vh = window.innerHeight;
+    window.scrollTo(0, index * vh);
+    const actualY = window.scrollY || window.pageYOffset;
+    const totalHeight = Math.max(
+      document.documentElement.scrollHeight,
+      document.body ? document.body.scrollHeight : 0
+    );
+    return {
+      ok: true,
+      scrollY: actualY,
+      viewportHeight: vh,
+      atBottom: (actualY + vh) >= totalHeight - 1,
+    };
+  }
+
+  function fullpageEnd() {
+    if (!STATE.fp) return { ok: true };
+    for (const h of STATE.fp.hiddenEls) {
+      try { h.el.style.display = h.display; } catch {}
+    }
+    document.documentElement.style.overflow = STATE.fp.htmlOverflow || '';
+    if (document.body) document.body.style.overflow = STATE.fp.bodyOverflow || '';
+    window.scrollTo(0, STATE.fp.originalScrollY || 0);
+    if (STATE.indicator) STATE.indicator.style.display = '';
+    STATE.fp = null;
+    return { ok: true };
+  }
+
+  // ---------- Message routing ----------
+
+  chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+    try {
+      if (msg.type === 'KEYBOARD_TRIGGER') {
+        const wantsIt = STATE.captureTarget === 'process'
+          ? STATE.processTriggers.keyboard
+          : STATE.triggers.keyboard;
+        if (STATE.isRecording && wantsIt) {
+          if (STATE.captureTarget === 'process') {
+            STATE.stepCounter++;
+            triggerCapture(STATE.lastMouse.x, STATE.lastMouse.y, 'process-keyboard', {
+              stepNumber: STATE.stepCounter,
+              actionLabel: `Manual step ${STATE.stepCounter}`,
+              elementInfo: { label: 'manual', kind: 'manual', text: '', tag: '' },
+            });
+          } else {
+            triggerCapture(STATE.lastMouse.x, STATE.lastMouse.y, 'keyboard');
+          }
+        }
+        sendResponse({ ok: true });
+      } else if (msg.type === 'TIMER_TRIGGER') {
+        const wantsIt = STATE.captureTarget === 'process'
+          ? STATE.processTriggers.timer
+          : STATE.triggers.timer;
+        if (STATE.isRecording && wantsIt) {
+          if (STATE.captureTarget === 'process') {
+            STATE.stepCounter++;
+            triggerCapture(STATE.lastMouse.x, STATE.lastMouse.y, 'process-timer', {
+              stepNumber: STATE.stepCounter,
+              actionLabel: `Periodic step ${STATE.stepCounter}`,
+              elementInfo: { label: 'timer', kind: 'timer', text: '', tag: '' },
+            });
+          } else {
+            triggerCapture(STATE.lastMouse.x, STATE.lastMouse.y, 'timer');
+          }
+        }
+        sendResponse({ ok: true });
+      } else if (msg.type === 'PING') {
+        sendResponse({ ok: true });
+      } else if (msg.type === 'FULLPAGE_BEGIN') {
+        sendResponse(fullpageBegin());
+      } else if (msg.type === 'FULLPAGE_SCROLL_TO') {
+        sendResponse(fullpageScrollTo(msg.index));
+      } else if (msg.type === 'FULLPAGE_END') {
+        sendResponse(fullpageEnd());
+      } else {
+        return false;
+      }
+    } catch (e) {
+      sendResponse({ ok: false, error: e?.message || String(e) });
+    }
+    return false;
+  });
+})();
