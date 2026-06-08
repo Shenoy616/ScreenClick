@@ -1,7 +1,8 @@
 {
   "manifest_version": 3,
+  "minimum_chrome_version": "116",
   "name": "ScreenClick",
-  "version": "1.4.8",
+  "version": "1.5.0",
   "description": "Capture screenshots during QA: visible tab, full page, entire screen, or step-by-step process recording. Export as PDF.",
   "permissions": [
     "activeTab",
@@ -11,7 +12,8 @@
     "scripting",
     "tabs",
     "offscreen",
-    "desktopCapture"
+    "desktopCapture",
+    "sidePanel"
   ],
   "host_permissions": [
     "<all_urls>"
@@ -28,11 +30,14 @@
     }
   },
   "options_page": "options/options.html",
+  "side_panel": {
+    "default_path": "sidepanel/sidepanel.html"
+  },
   "commands": {
     "capture-screenshot": {
       "suggested_key": {
-        "default": "Ctrl+Shift+S",
-        "mac": "Command+Shift+S"
+        "default": "Ctrl+Shift+2",
+        "mac": "Command+Shift+2"
       },
       "description": "Capture screenshot during recording"
     },
@@ -41,14 +46,7 @@
         "default": "Ctrl+Shift+1",
         "mac": "Command+Shift+1"
       },
-      "description": "Start or stop recording (saves PDF on stop)"
-    },
-    "stop-and-save": {
-      "suggested_key": {
-        "default": "Ctrl+Shift+2",
-        "mac": "Command+Shift+2"
-      },
-      "description": "Stop recording and save PDF immediately"
+      "description": "Start capturing or stop and save PDF"
     }
   },
   "icons": {
@@ -59,9 +57,10 @@
   "content_scripts": [
     {
       "matches": ["<all_urls>"],
-      "js": ["content/content.js"],
+      "js": ["shared/shortcuts.js", "content/content.js"],
       "css": ["content/click-ring.css"],
-      "run_at": "document_idle"
+      "run_at": "document_idle",
+      "all_frames": true
     }
   ],
   "web_accessible_resources": [

@@ -12,33 +12,36 @@
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
   <header class="topbar">
-    <a href="#" class="topbar-brand">
-      <img src="icon-48.png" alt="" class="topbar-icon">
-      <span>ScreenClick</span>
-    </a>
-    <nav class="topbar-nav">
-      <a href="#privacy">Privacy</a>
-      <a href="#use-cases">Use cases</a>
-      <a href="#features">Features</a>
-      <a href="#compare">Compare</a>
-      <a href="#install">Install</a>
-      <a href="#faq">FAQ</a>
-      <a href="screenclick.zip" download class="topbar-cta">Download<span aria-hidden="true"> →</span></a>
-    </nav>
+    <div class="topbar-inner">
+      <a href="#main" class="topbar-brand">
+        <img src="icon-48.png" alt="" class="topbar-icon">
+        <span>ScreenClick</span>
+      </a>
+      <button type="button" class="nav-toggle" id="nav-toggle" aria-label="Open menu" aria-expanded="false" aria-controls="topbar-nav">
+        <span></span><span></span>
+      </button>
+      <nav class="topbar-nav" id="topbar-nav">
+        <a href="#privacy">Privacy</a>
+        <a href="#use-cases">Use cases</a>
+        <a href="#features">Features</a>
+        <a href="#compare">Compare</a>
+        <a href="#install">Install</a>
+        <a href="#faq">FAQ</a>
+        <a href="screenclick.zip" download class="topbar-cta">Download<span aria-hidden="true"> →</span></a>
+      </nav>
+    </div>
   </header>
 
+  <main id="main">
   <section class="hero">
     <div class="hero-grid">
       <div class="hero-copy">
         <div class="privacy-hero-badge">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-          <span><strong>Privacy-first by architecture</strong> — No network · No analytics · No cloud · No account</span>
-        </div>
-
-        <div class="hero-meta">
-          <span class="meta-pill meta-pill-privacy">#1 reason teams choose ScreenClick</span>
-          <span class="meta-version">v1.4.8 · 16 verticals · Manifest V3</span>
+          <span><strong>Privacy-first</strong> · No network · No cloud · No account</span>
         </div>
 
         <h1 class="hero-title">
@@ -46,19 +49,21 @@
           <span class="serif-italic">never leave your machine.</span>
         </h1>
 
-        <p class="hero-context" id="hero-context">
-          The only safe capture tool for EHR workflows, clinical training, and patient portal support — PHI never leaves the machine.
+        <p class="hero-context hero-fade" id="hero-context">
+          Bug Reproduction packets and regression evidence — labeled, local, ready to attach to any ticket.
         </p>
 
-        <p class="hero-lede" id="hero-lede">
-          EHR walkthroughs, clinical trial documentation, and telehealth issue reproduction — captured and compiled entirely on-device. No network calls. No cloud storage. HIPAA-safe by architecture.
+        <p class="hero-lede hero-fade" id="hero-lede">
+          Process Record auto-labels every step — export a UTC-stamped, signed PDF. Nothing uploaded between capture and ticket.
         </p>
 
-        <div class="role-switcher" aria-label="Choose your role">
-          <span class="role-label">I'm a</span>
-          <div class="category-tabs" id="category-tabs"></div>
-          <div class="role-pills-wrap">
-            <div class="role-pills" id="role-pills" role="tablist"></div>
+        <div class="role-panel">
+          <div class="role-switcher" aria-label="Choose your role">
+            <span class="role-label">I'm a</span>
+            <div class="category-tabs" id="category-tabs"></div>
+            <div class="role-pills-wrap">
+              <div class="role-pills" id="role-pills" role="tablist"></div>
+            </div>
           </div>
         </div>
 
@@ -85,6 +90,10 @@
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
             <span>No cloud custody</span>
           </div>
+          <div class="trust-item">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+            <span>UTC attestation</span>
+          </div>
         </div>
       </div>
 
@@ -107,7 +116,7 @@
             </div>
             <div class="pdf-meta">
               <span id="mock-url">app.example.com/checkout</span>
-              <span id="mock-time">Jun 2, 2026 · 14:32:08</span>
+              <span id="mock-time" title="2026-06-02T14:32:08.000Z UTC">14:32:08Z UTC</span>
             </div>
             <div class="pdf-step pdf-step-dim" id="mock-step-2">
               <span class="pdf-step-label">Step 2</span>
@@ -131,13 +140,13 @@
         <span class="detail-label">Cloud upload</span>
         <span class="detail-value">Never</span>
       </div>
-      <div class="detail-cell">
+      <div class="detail-cell detail-cell-advantage">
+        <span class="detail-label">Timestamps</span>
+        <span class="detail-value">UTC + signed</span>
+      </div>
+      <div class="detail-cell detail-cell-advantage">
         <span class="detail-label">Output</span>
         <span class="detail-value">Labeled PDF</span>
-      </div>
-      <div class="detail-cell">
-        <span class="detail-label">Account</span>
-        <span class="detail-value">Not required</span>
       </div>
     </div>
   </section>
@@ -145,7 +154,7 @@
   <section id="privacy" class="privacy">
     <div class="privacy-inner">
       <div class="section-header section-header-wide">
-        <span class="eyebrow">Our #1 USP</span>
+        <span class="eyebrow">Privacy by design</span>
         <h2 class="section-title">Privacy isn't a feature.<br>It's <span class="serif-italic">the architecture.</span></h2>
         <p class="section-sub">Loom uploads your video. Cloud screenshot tools store your data on someone else's server. ScreenClick runs entirely in your browser — captures, PDF generation, and download all happen locally. That's why healthcare, legal, finance, and compliance teams trust it.</p>
       </div>
@@ -187,6 +196,13 @@
           <p>Captures live in <code>chrome.storage.local</code> for the session, then become a PDF saved to your machine.</p>
         </article>
         <article class="privacy-card">
+          <div class="privacy-card-icon privacy-card-icon-advantage" aria-hidden="true">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+          </div>
+          <h3>UTC attestation</h3>
+          <p>Every capture stamped in UTC. Exported PDFs include a signed integrity manifest — SHA-256 hashes and ECDSA signature, computed on-device.</p>
+        </article>
+        <article class="privacy-card">
           <div class="privacy-card-icon" aria-hidden="true">
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M16 13H8M16 17H8M10 9H8"/></svg>
           </div>
@@ -200,7 +216,7 @@
           <div class="arch-step">
             <span class="arch-num">1</span>
             <span class="arch-label">You capture on screen</span>
-            <span class="arch-detail">Visible tab · Process Record · Full page · Entire screen</span>
+            <span class="arch-detail">Visible tab · Process Record · Entire screen</span>
           </div>
           <div class="arch-arrow" aria-hidden="true">→</div>
           <div class="arch-step arch-step-local">
@@ -211,8 +227,8 @@
           <div class="arch-arrow" aria-hidden="true">→</div>
           <div class="arch-step arch-step-local">
             <span class="arch-num">3</span>
-            <span class="arch-label">PDF built on-device</span>
-            <span class="arch-detail">jsPDF in offscreen document — no server</span>
+            <span class="arch-label">PDF + attestation</span>
+            <span class="arch-detail">Labeled pages · UTC stamps · signed hash manifest</span>
           </div>
           <div class="arch-arrow" aria-hidden="true">→</div>
           <div class="arch-step arch-step-local">
@@ -235,8 +251,8 @@
   <section id="use-cases" class="use-cases">
     <div class="section-header section-header-wide">
       <span class="eyebrow">Who it's for</span>
-      <h2 class="section-title">Sixteen teams.<br>One deliverable: <span class="serif-italic">proof of what happened.</span></h2>
-      <p class="section-sub">80+ use cases across healthcare, legal, compliance, QA, L&amp;D, and more. Every vertical gets the same privacy guarantee — on-device capture, labeled PDF output. Pick your role above or explore below.</p>
+      <h2 class="section-title">Any team.<br>One deliverable: <span class="serif-italic">proof of what happened.</span></h2>
+      <p class="section-sub">Every team gets the same privacy guarantee — on-device capture, labeled PDF output. Pick your role above or explore below.</p>
     </div>
 
     <div class="vertical-spotlight" id="vertical-spotlight">
@@ -260,7 +276,7 @@
   <section id="features" class="features">
     <div class="section-header">
       <span class="eyebrow">What it does</span>
-      <h2 class="section-title">Four capture modes,<br>one report.</h2>
+      <h2 class="section-title">Three capture modes,<br>one report.</h2>
     </div>
 
     <div class="feature-grid">
@@ -302,22 +318,6 @@
       <article class="feature">
         <div class="feature-illo">
           <svg viewBox="0 0 120 80" aria-hidden="true">
-            <rect x="22" y="6" width="76" height="68" rx="3" fill="none" stroke="currentColor" stroke-width="1.4"/>
-            <rect x="22" y="6" width="76" height="22" fill="currentColor" opacity="0.18"/>
-            <rect x="22" y="30" width="76" height="22" fill="currentColor" opacity="0.10"/>
-            <rect x="22" y="54" width="76" height="20" fill="currentColor" opacity="0.05"/>
-            <path d="M14 24 L14 56" stroke="currentColor" stroke-width="0.8" stroke-dasharray="2,2"/>
-            <path d="M11 24 L17 24 M11 56 L17 56" stroke="currentColor" stroke-width="0.8"/>
-          </svg>
-        </div>
-        <div class="feature-tags"><span>Legal</span><span>Healthcare</span><span>Real Estate</span></div>
-        <h3>Full Page</h3>
-        <p>Scrolls the page in viewport-height tiles, hides sticky elements, then stitches everything into one tall image. Preserve long policy docs, audit logs, or pricing tables.</p>
-      </article>
-
-      <article class="feature">
-        <div class="feature-illo">
-          <svg viewBox="0 0 120 80" aria-hidden="true">
             <rect x="6" y="10" width="108" height="60" rx="3" fill="none" stroke="currentColor" stroke-width="1.4"/>
             <rect x="14" y="18" width="44" height="32" rx="2" fill="currentColor" opacity="0.10"/>
             <rect x="62" y="18" width="44" height="32" rx="2" fill="currentColor" opacity="0.18"/>
@@ -326,8 +326,8 @@
           </svg>
         </div>
         <div class="feature-tags"><span>UX Research</span><span>Legal</span><span>Enterprise IT</span></div>
-        <h3>Entire Screen</h3>
-        <p>Capture anything outside the browser — native apps, video calls, your whole desktop. Ideal for remote research sessions and desktop application states.</p>
+        <h3>Screen or Window</h3>
+        <p>Still screenshots of your monitor or any app window. Native apps, video calls, full desktop — one JPEG per shortcut press.</p>
       </article>
     </div>
   </section>
@@ -346,7 +346,7 @@
       <div class="editorial-quote">
         <p>Clicked <em>button</em>: Accept Terms &amp; Conditions</p>
         <p>Step 4 of 12 · portal.example.com/consent</p>
-        <p>Timestamp: 2026-06-02T14:32:08 · Local system clock</p>
+        <p>2026-06-02T14:32:08Z UTC</p>
       </div>
     </div>
   </section>
@@ -412,6 +412,13 @@
             <td class="compare-highlight"><strong>Zero network calls</strong></td>
           </tr>
           <tr>
+            <td>Timestamps / integrity</td>
+            <td>None</td>
+            <td>None</td>
+            <td>Server-side</td>
+            <td class="compare-highlight"><strong>UTC + signed manifest</strong></td>
+          </tr>
+          <tr>
             <td>HIPAA / PHI safe</td>
             <td>Rarely</td>
             <td>Local only</td>
@@ -456,7 +463,7 @@
         <span class="step-number">04</span>
         <div class="step-body">
           <h3>Start capturing</h3>
-          <p>Click the toolbar icon, hit <strong>Start Capturing</strong>, pick your mode. Or use <code>Shift-Command+1</code> to start a Visible Tab session instantly.</p>
+          <p>Click the toolbar icon, hit <strong>Start Capturing</strong>, pick your mode. Or press <code>Command+Shift+1</code> (Mac) / <code>Ctrl+Shift+1</code> (Windows) to toggle a session.</p>
         </div>
       </li>
     </ol>
@@ -469,7 +476,7 @@
     </div>
 
     <div class="faq-list">
-      <details open>
+      <details>
         <summary>Is ScreenClick safe for HIPAA, PHI, and patient data?</summary>
         <p>Yes — by architecture, not by policy. ScreenClick makes no network calls, stores captures in local browser storage only, and builds PDFs on-device. Patient data never transits to a cloud server because there is no cloud component. This makes it suitable for EHR workflows, clinical training, and telehealth support where PHI is visible on screen.</p>
       </details>
@@ -487,7 +494,7 @@
       </details>
       <details>
         <summary>Are timestamps tamper-evident?</summary>
-        <p>Timestamps come from your local system clock at capture time and are embedded in the PDF. They're not cryptographically signed — suitable for internal audit, training, and operational use. For high-stakes legal evidence, pair with a notary or trusted-timestamp provider.</p>
+        <p>Yes — on-device. Every capture is stamped in <strong>UTC (ISO 8601)</strong> at the moment it was taken. When you export, ScreenClick adds a final attestation page: SHA-256 hashes of each screenshot, a chained integrity manifest, and an ECDSA P-256 signature — all computed locally with zero network calls. That proves the PDF wasn't altered after export. Times still come from your system clock; for legally binding third-party timestamps (RFC 3161), pair with a trusted timestamp authority.</p>
       </details>
       <details>
         <summary>How is this different from Loom?</summary>
@@ -495,7 +502,7 @@
       </details>
       <details>
         <summary>What about Firefox or Safari?</summary>
-        <p>Chrome and Chromium-based browsers (Edge, Brave, Arc) only for now. Manifest V3 ports for the others are doable but not built yet.</p>
+        <p>Chrome and Chromium-based browsers (Edge, Brave, Arc) only for now.</p>
       </details>
     </div>
   </section>
@@ -505,7 +512,7 @@
       Capture proof.<br>
       <span class="serif-italic">Keep it private.</span>
     </h2>
-    <p class="closing-sub">No network · No cloud · No account · Free · ~177 KB</p>
+    <p class="closing-sub">No network · No cloud · No account · Free</p>
     <a href="screenclick.zip" download class="btn-primary btn-large">
       Download ScreenClick
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -513,6 +520,8 @@
       </svg>
     </a>
   </section>
+
+  </main>
 
   <footer class="footer">
     <div class="footer-inner">
@@ -525,7 +534,7 @@
         <span class="footer-dot">·</span>
         <span>Privacy-first workflow evidence</span>
         <span class="footer-dot">·</span>
-        <span>16 verticals · Zero network calls</span>
+        <span>Zero network calls</span>
       </div>
     </div>
   </footer>

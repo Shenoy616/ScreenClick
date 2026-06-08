@@ -1,32 +1,62 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>QA Screen Capture Setup</title>
+  <title>ScreenClick — Screen or window</title>
+  <link rel="stylesheet" href="../shared/theme.css">
+  <script src="../shared/theme.js"></script>
   <style>
-    body {
+    html, body {
       margin: 0;
-      padding: 28px;
-      background: #0f1115;
-      color: #e8eaed;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-      font-size: 14px;
+      padding: 0;
+      min-height: 100vh;
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font-sans);
+      font-size: 13px;
+      box-sizing: border-box;
+      -webkit-font-smoothing: antialiased;
+    }
+    body {
       display: flex;
       flex-direction: column;
-      gap: 14px;
       min-height: 100vh;
-      box-sizing: border-box;
     }
-    h1 { font-size: 16px; font-weight: 600; margin: 0; }
-    p { color: #9aa0a6; line-height: 1.5; margin: 0; font-size: 13px; }
-    .status { color: #22c55e; font-family: ui-monospace, monospace; font-size: 12px; }
-    .err { color: #ef4444; font-family: ui-monospace, monospace; font-size: 12px; }
+    #picker-spacer {
+      flex: 1 1 auto;
+      min-height: 520px;
+    }
+    #after-pick {
+      display: none;
+      padding: 20px 24px 24px;
+      gap: 10px;
+      flex-direction: column;
+    }
+    body.ready #picker-spacer { display: none; min-height: 0; }
+    body.ready #after-pick { display: flex; }
+    h1 { font-size: 15px; font-weight: 600; margin: 0; letter-spacing: -0.01em; }
+    p { color: var(--text-dim); line-height: 1.45; margin: 0; }
+    .status {
+      color: var(--advantage);
+      font-family: var(--font-mono);
+      font-size: 12px;
+      padding: 8px 24px 16px;
+    }
+    .err { color: var(--danger); }
   </style>
 </head>
 <body>
-  <h1>Setting up screen capture</h1>
-  <p>Chrome will ask you to choose a screen or window to capture. This setup window will close automatically when done.</p>
-  <div id="status" class="status">Opening picker...</div>
+  <div id="picker-spacer" aria-hidden="true"></div>
+  <div id="after-pick">
+    <h1>Screen or window capture</h1>
+    <p>Keep this window open while you capture. Use ⌘⇧2 / Ctrl+Shift+2 or <strong>Capture</strong> in the side panel.</p>
+  </div>
+  <div id="status" class="status">Preparing…</div>
+  <script>
+    globalThis.ScreenClickTheme?.applyStoredTheme();
+    globalThis.ScreenClickTheme?.listenThemeChanges();
+  </script>
+  <script src="../shared/shortcuts.js"></script>
   <script src="launcher.js"></script>
 </body>
 </html>

@@ -31,7 +31,7 @@ const VERTICALS = [
       'FDA 21 CFR Part 11 software validation evidence',
       'Incident reporting workflow capture for risk management',
     ],
-    modes: ['Process Record', 'Full Page', 'On-device only'],
+    modes: ['Process Record', 'Visible Tab', 'On-device only'],
     differentiator: 'No network calls, no analytics, no cloud storage. The only safe capture tool for workflows that touch patient data.',
   },
   {
@@ -55,7 +55,7 @@ const VERTICALS = [
       'Timestamped evidence of access controls and permission states',
       'Third-party vendor access monitoring documentation',
     ],
-    modes: ['Process Record', 'Timer', 'Full Page'],
+    modes: ['Process Record', 'Timer', 'Visible Tab'],
     differentiator: 'On-device processing means sensitive compliance data never leaves the machine — no cloud upload, no third-party custody.',
   },
   {
@@ -68,7 +68,7 @@ const VERTICALS = [
     tagline: 'Preserve digital evidence on-device — no third-party custody',
     heroContext: 'Litigation-ready preservation with a clean chain of custody — because nothing ever hits a cloud server.',
     heroLede: 'Preserve web content before it disappears, document terms-of-service acceptance, and build chain-of-custody PDFs — all captured and compiled on your machine.',
-    mockStep1: 'Full page captured: terms v3.2',
+    mockStep1: 'Captured: terms v3.2',
     mockStep2: 'Clicked: I Agree to Terms',
     mockUrl: 'vendor.example.com/terms-of-service',
     mockFile: 'Evidence-Preservation-2026-06-02.pdf',
@@ -79,7 +79,7 @@ const VERTICALS = [
       'Chain-of-custody PDF for court or regulatory submission',
       'Intellectual property infringement documentation',
     ],
-    modes: ['Full Page', 'Visible Tab', 'Entire Screen'],
+    modes: ['Visible Tab', 'Entire Screen', 'Process Record'],
     differentiator: 'On-device processing maintains a clean chain of custody — essential for legal admissibility. No third-party servers.',
   },
   {
@@ -103,7 +103,7 @@ const VERTICALS = [
       'Fraud investigation evidence — preserve suspicious screen states',
       'Internal control testing evidence for regulators',
     ],
-    modes: ['Process Record', 'Full Page', 'Timer'],
+    modes: ['Process Record', 'Visible Tab', 'Timer'],
     differentiator: 'Financial data stays on the machine — no cloud custody, no compliance review of a third-party vendor.',
   },
   {
@@ -126,7 +126,7 @@ const VERTICALS = [
       'Win/loss evidence — competitor positioning at time of deal',
       'Sales process compliance documentation for regulated industries',
     ],
-    modes: ['Visible Tab', 'Process Record', 'Full Page'],
+    modes: ['Visible Tab', 'Process Record', 'Entire Screen'],
     differentiator: 'Fast competitive intel capture — snap a full pricing page or record a demo narrative without switching tools.',
   },
   {
@@ -136,8 +136,8 @@ const VERTICALS = [
     shortLabel: 'QA',
     name: 'QA & Testing',
     tagline: 'From test run to evidence PDF in one session',
-    heroContext: 'Bug repro packets and regression evidence — labeled, local, ready to attach to any ticket.',
-    heroLede: 'Regression evidence, bug reproduction packets, and release sign-off PDFs — with every click and form fill auto-labeled. No cloud upload between capture and ticket.',
+    heroContext: 'Bug Reproduction packets and regression evidence — labeled, local, ready to attach to any ticket.',
+    heroLede: 'Process Record auto-labels every step — export a UTC-stamped, signed PDF. Nothing uploaded between capture and ticket.',
     mockStep1: 'Clicked button: Submit Order',
     mockStep2: 'Typed in input: email',
     mockUrl: 'staging.example.com/checkout',
@@ -149,7 +149,7 @@ const VERTICALS = [
       'Load test visual state capture using Timer mode',
       'Bug reproduction packets attached to tickets instead of step descriptions',
     ],
-    modes: ['Process Record', 'Timer', 'Full Page', 'Visible Tab'],
+    modes: ['Process Record', 'Timer', 'Visible Tab'],
     differentiator: 'Process Record auto-labels each click and form fill — your test script writes itself as you walk the flow.',
   },
   {
@@ -182,10 +182,10 @@ const VERTICALS = [
     shortLabel: 'Dev handoff',
     name: 'Developer Handoff',
     tagline: 'Give engineers a reproducible spec, not just a screenshot',
-    heroContext: 'Bug reports with exact repro steps — captured locally, shared as PDF when ready.',
-    heroLede: 'Annotated UI bug reports with reproduction steps, design spec screenshots, and staging vs. production comparisons — labeled so engineers can reproduce exactly.',
+    heroContext: 'Bug reports with exact Reproduction steps — captured locally, shared as PDF when ready.',
+    heroLede: 'Annotated UI bug reports with Reproduction steps, design spec screenshots, and staging vs. production comparisons — labeled so engineers can reproduce exactly.',
     mockStep1: 'Step 2: Toggled feature flag OFF',
-    mockStep2: 'Bug reproduced: layout break',
+    mockStep2: 'Bug Reproduction: layout break',
     mockUrl: 'staging.example.com/dashboard',
     mockFile: 'Bug-Report-UI-4421.pdf',
     useCases: [
@@ -195,7 +195,7 @@ const VERTICALS = [
       'Browser compatibility visual evidence across environments',
       'Feature flag state documentation before/after toggle',
     ],
-    modes: ['Process Record', 'Visible Tab', 'Full Page'],
+    modes: ['Process Record', 'Visible Tab', 'Entire Screen'],
     differentiator: 'Process Record labels each step so engineers reproduce bugs on the first try — not after three Slack threads.',
   },
   {
@@ -218,7 +218,7 @@ const VERTICALS = [
       'Configuration change documentation with timestamped state',
       'IT service desk issue reproduction and escalation',
     ],
-    modes: ['Visible Tab', 'Full Page', 'Timer'],
+    modes: ['Visible Tab', 'Entire Screen', 'Timer'],
     differentiator: 'Timer mode monitors deployment state over time — periodic captures without manual screenshot hunting.',
   },
   {
@@ -241,7 +241,7 @@ const VERTICALS = [
       'Franchisee or partner training documentation',
       'Compliance training evidence — prove the walkthrough occurred',
     ],
-    modes: ['Process Record', 'Full Page', 'PDF export'],
+    modes: ['Process Record', 'Visible Tab', 'PDF export'],
     differentiator: 'No screen recorder means no video editing, no upload time, no hosting. One walkthrough = a PDF guide ready for any LMS.',
   },
   {
@@ -264,7 +264,7 @@ const VERTICALS = [
       'Lab software onboarding guides for new team members',
       'Grant portal submission workflow evidence',
     ],
-    modes: ['Process Record', 'Full Page', 'Timer'],
+    modes: ['Process Record', 'Visible Tab', 'Timer'],
     differentiator: 'Reproducible step documentation for papers and peer review — no cloud custody of sensitive research data.',
   },
   {
@@ -310,7 +310,7 @@ const VERTICALS = [
       'Project milestone sign-off documentation',
       'Before/after optimization documentation (CRO, SEO, design)',
     ],
-    modes: ['Process Record', 'Full Page', 'PDF export'],
+    modes: ['Process Record', 'Visible Tab', 'PDF export'],
     differentiator: 'One labeled walkthrough = a client-ready deliverable. No video editing, no cloud links that expire.',
   },
   {
@@ -320,7 +320,7 @@ const VERTICALS = [
     shortLabel: 'Support',
     name: 'Customer Support',
     tagline: 'Reproduce any issue and escalate with full context',
-    heroContext: 'Escalation packets with labeled repro steps — no "I can\'t reproduce it" ever again.',
+    heroContext: 'Escalation packets with labeled Reproduction steps — no "I can\'t reproduce it" ever again.',
     heroLede: 'Reproduce customer-reported bugs with labeled step-by-step evidence, capture error states for engineering hand-off, and build escalation packets with complete visual context.',
     mockStep1: 'Clicked link: Account Settings',
     mockStep2: 'Error state captured at Step 4',
@@ -333,7 +333,7 @@ const VERTICALS = [
       'Onboarding issue documentation — where users get stuck',
       'Knowledge base content generation from live support sessions',
     ],
-    modes: ['Process Record', 'Visible Tab', 'Full Page'],
+    modes: ['Process Record', 'Visible Tab', 'Entire Screen'],
     differentiator: 'Process Record labels each support step so engineering sees exactly what the agent did.',
   },
   {
@@ -346,7 +346,7 @@ const VERTICALS = [
     heroContext: 'Personal archives and dispute evidence — private, on-device, no account required.',
     heroLede: 'Insurance claim state preservation, booking confirmations, billing dispute evidence, and important web content archiving — all on your machine, no cloud account needed.',
     mockStep1: 'Confirmation page captured',
-    mockStep2: 'Full page: policy terms archived',
+    mockStep2: 'Archived: policy terms',
     mockUrl: 'insurance.example.com/claim/status',
     mockFile: 'Claim-Archive-2026.pdf',
     useCases: [
@@ -356,7 +356,7 @@ const VERTICALS = [
       'Important web content archiving before it changes or disappears',
       'Personal audit trail for subscription or billing disputes',
     ],
-    modes: ['Visible Tab', 'Full Page', 'Double-click'],
+    modes: ['Visible Tab', 'Process Record', 'Double-click'],
     differentiator: 'No account, no cloud, no subscription. Capture and save a PDF in under a minute.',
   },
   {
@@ -379,8 +379,8 @@ const VERTICALS = [
       'Lease and contract signing workflow evidence',
       'Mortgage portal submission workflow evidence',
     ],
-    modes: ['Full Page', 'Process Record', 'Visible Tab'],
-    differentiator: 'Full Page capture preserves complete listing details including below-the-fold content before they change.',
+    modes: ['Process Record', 'Visible Tab', 'Entire Screen'],
+    differentiator: 'Process Record preserves every listing step — price, photos, and form submissions — before details change.',
   },
 ];
 
@@ -390,9 +390,27 @@ const VERTICALS = [
   const categoryTabsEl = document.getElementById('category-tabs');
   if (!pillsEl) return;
 
-  let activeId = sessionStorage.getItem('sc-vertical') || 'healthcare';
-  let activeCategory = 'all';
-  if (!VERTICALS.find((v) => v.id === activeId)) activeId = 'healthcare';
+  const LANDING_DEFAULT = { category: 'product', vertical: 'qa' };
+  const LANDING_VERSION = '2';
+
+  if (sessionStorage.getItem('sc-landing-v') !== LANDING_VERSION) {
+    sessionStorage.removeItem('sc-vertical');
+    sessionStorage.removeItem('sc-category');
+    sessionStorage.setItem('sc-landing-v', LANDING_VERSION);
+  }
+
+  let activeCategory = sessionStorage.getItem('sc-category') || LANDING_DEFAULT.category;
+  let activeId = sessionStorage.getItem('sc-vertical') || LANDING_DEFAULT.vertical;
+
+  const selected = VERTICALS.find((v) => v.id === activeId);
+  if (!selected) {
+    activeId = LANDING_DEFAULT.vertical;
+    activeCategory = LANDING_DEFAULT.category;
+  } else if (activeCategory !== 'all' && selected.category !== activeCategory) {
+    const inCategory = VERTICALS.find((v) => v.category === activeCategory);
+    activeId = inCategory ? inCategory.id : LANDING_DEFAULT.vertical;
+    activeCategory = VERTICALS.find((v) => v.id === activeId).category;
+  }
 
   function filteredVerticals() {
     if (activeCategory === 'all') return VERTICALS;
@@ -428,14 +446,22 @@ const VERTICALS = [
     ).join('');
   }
 
-  function applyVertical(v) {
+  function applyVertical(v, syncCategory = false) {
     activeId = v.id;
     sessionStorage.setItem('sc-vertical', v.id);
 
-    const ctx = document.getElementById('hero-context');
-    if (ctx) ctx.textContent = v.heroContext;
+    if (syncCategory) {
+      activeCategory = v.category;
+      sessionStorage.setItem('sc-category', activeCategory);
+      renderCategoryTabs();
+      renderPills();
+      renderGrid();
+    }
 
-    document.getElementById('hero-lede').textContent = v.heroLede;
+    const ctx = document.getElementById('hero-context');
+    const lede = document.getElementById('hero-lede');
+    fadeText(ctx, v.heroContext);
+    fadeText(lede, v.heroLede);
     document.getElementById('spotlight-tag').textContent = v.name;
     document.getElementById('spotlight-title').textContent = v.tagline;
     document.getElementById('spotlight-diff').textContent = v.differentiator;
@@ -453,24 +479,36 @@ const VERTICALS = [
     document.getElementById('mock-url').textContent = v.mockUrl;
     document.getElementById('mock-filename').textContent = v.mockFile;
 
-    pillsEl.querySelectorAll('.role-pill').forEach((btn) => {
-      const on = btn.dataset.id === v.id;
-      btn.classList.toggle('active', on);
-      btn.setAttribute('aria-selected', on);
-    });
+    if (!syncCategory) {
+      pillsEl.querySelectorAll('.role-pill').forEach((btn) => {
+        const on = btn.dataset.id === v.id;
+        btn.classList.toggle('active', on);
+        btn.setAttribute('aria-selected', on);
+      });
 
-    gridEl.querySelectorAll('.vertical-card').forEach((card) => {
-      card.classList.toggle('active', card.dataset.id === v.id);
-    });
+      gridEl.querySelectorAll('.vertical-card').forEach((card) => {
+        card.classList.toggle('active', card.dataset.id === v.id);
+      });
+    }
 
     const spotlight = document.getElementById('vertical-spotlight');
     spotlight.classList.remove('spotlight-flash');
     void spotlight.offsetWidth;
     spotlight.classList.add('spotlight-flash');
+
+    if (syncCategory) {
+      requestAnimationFrame(() => {
+        const activePill = pillsEl.querySelector('.role-pill.active');
+        if (activePill) {
+          activePill.scrollIntoView({ inline: 'center', block: 'nearest', behavior: 'smooth' });
+        }
+      });
+    }
   }
 
   function setCategory(catId) {
     activeCategory = catId;
+    sessionStorage.setItem('sc-category', activeCategory);
     renderCategoryTabs();
     renderPills();
     renderGrid();
@@ -485,7 +523,7 @@ const VERTICALS = [
   renderCategoryTabs();
   renderPills();
   renderGrid();
-  applyVertical(VERTICALS.find((v) => v.id === activeId));
+  applyVertical(VERTICALS.find((v) => v.id === activeId), true);
 
   if (categoryTabsEl) {
     categoryTabsEl.addEventListener('click', (e) => {
@@ -499,7 +537,7 @@ const VERTICALS = [
     const btn = e.target.closest('.role-pill');
     if (!btn) return;
     const v = VERTICALS.find((x) => x.id === btn.dataset.id);
-    if (v) applyVertical(v);
+    if (v) applyVertical(v, true);
   });
 
   gridEl.addEventListener('click', (e) => {
@@ -507,7 +545,7 @@ const VERTICALS = [
     if (!card) return;
     const v = VERTICALS.find((x) => x.id === card.dataset.id);
     if (v) {
-      applyVertical(v);
+      applyVertical(v, true);
       document.getElementById('vertical-spotlight').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     }
   });
@@ -518,6 +556,43 @@ const VERTICALS = [
     if (!card) return;
     e.preventDefault();
     card.click();
+  });
+})();
+
+function fadeText(el, text) {
+  if (!el || el.textContent === text) return;
+  el.style.opacity = '0';
+  setTimeout(() => {
+    el.textContent = text;
+    el.style.opacity = '1';
+  }, 120);
+}
+
+(function initMobileNav() {
+  const toggle = document.getElementById('nav-toggle');
+  const nav = document.getElementById('topbar-nav');
+  if (!toggle || !nav) return;
+
+  toggle.addEventListener('click', () => {
+    const open = nav.classList.toggle('is-open');
+    toggle.setAttribute('aria-expanded', open);
+    toggle.setAttribute('aria-label', open ? 'Close menu' : 'Open menu');
+  });
+
+  nav.querySelectorAll('a').forEach((link) => {
+    link.addEventListener('click', () => {
+      nav.classList.remove('is-open');
+      toggle.setAttribute('aria-expanded', 'false');
+      toggle.setAttribute('aria-label', 'Open menu');
+    });
+  });
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && nav.classList.contains('is-open')) {
+      nav.classList.remove('is-open');
+      toggle.setAttribute('aria-expanded', 'false');
+      toggle.focus();
+    }
   });
 })();
 
@@ -556,4 +631,43 @@ const VERTICALS = [
   );
 
   targets.forEach((el) => io.observe(el));
+})();
+
+(function initTopbarEnhancements() {
+  const topbar = document.querySelector('.topbar');
+  const navLinks = document.querySelectorAll('.topbar-nav a[href^="#"]');
+  const sections = Array.from(navLinks)
+    .map((link) => {
+      const id = link.getAttribute('href').slice(1);
+      const el = document.getElementById(id);
+      return el ? { link, el } : null;
+    })
+    .filter(Boolean);
+
+  const setScrolled = () => {
+    if (topbar) topbar.classList.toggle('is-scrolled', window.scrollY > 8);
+  };
+  setScrolled();
+  window.addEventListener('scroll', setScrolled, { passive: true });
+
+  if (sections.length === 0) return;
+
+  const setActive = (id) => {
+    navLinks.forEach((link) => {
+      link.classList.toggle('is-active', link.getAttribute('href') === `#${id}`);
+    });
+  };
+
+  const sectionObserver = new IntersectionObserver(
+    (entries) => {
+      const visible = entries
+        .filter((e) => e.isIntersecting)
+        .sort((a, b) => b.intersectionRatio - a.intersectionRatio);
+      if (visible.length === 0) return;
+      setActive(visible[0].target.id);
+    },
+    { rootMargin: '-40% 0px -50% 0px', threshold: [0, 0.25, 0.5] }
+  );
+
+  sections.forEach(({ el }) => sectionObserver.observe(el));
 })();

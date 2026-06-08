@@ -1,12 +1,7 @@
 // Popup. State machine across: idle → target picker → recording → filename → idle.
 
 // Apply theme as early as possible to avoid flash of wrong theme on open.
-(async () => {
-  try {
-    const { theme } = await chrome.storage.local.get('theme');
-    if (theme === 'dark') document.documentElement.setAttribute('data-theme', 'dark');
-  } catch {}
-})();
+globalThis.ScreenClickTheme?.applyStoredTheme();
 
 // Platform detection for shortcut display.
 // Chrome maps "Ctrl" → "Cmd" automatically on macOS for the actual binding,
@@ -18,7 +13,7 @@ const IS_MAC = (() => {
 })();
 
 const MOD_KEY_LABEL = IS_MAC ? 'Command' : 'Control';
-const CAPTURE_SHORTCUT = `Shift-${MOD_KEY_LABEL}+S`;
+const CAPTURE_SHORTCUT = `Shift-${MOD_KEY_LABEL}+2`;
 
 // Populate each shortcut chip with full text like "Shift-Command+1".
 document.querySelectorAll('.shortcut-chip').forEach((el) => {
@@ -28,7 +23,7 @@ document.querySelectorAll('.shortcut-chip').forEach((el) => {
 });
 
 const els = {
-  startBtn: document.getElementById('start-btn'),
+  captureBtn: document.getElementById('capture-btn'),
   stopBtn: document.getElementById('stop-btn'),
   discardBtn: document.getElementById('discard-btn'),
   counterSection: document.getElementById('counter-section'),
@@ -44,36 +39,106 @@ const els = {
   targetPicker: document.getElementById('target-picker'),
   targetCancel: document.getElementById('target-cancel'),
   primaryActions: document.getElementById('primary-actions'),
-  modeIndicator: document.getElementById('mode-indicator'),
-  modeValue: document.getElementById('mode-value'),
 };
 
 const DEFAULT_SETTINGS = {
-  triggers: { doubleClick: true, keyboard: true, timer: false },
+  triggers: { click: true, keyboard: true, timer: false },
+  screenTriggers: { keyboard: true, timer: false },
   processTriggers: { click: true, inputChange: true, keyboard: true, timer: false },
   processOptions: { onlyInteractive: true, debounceMs: 250 },
   timerInterval: 10000,
+  screenTimerInterval: 10000,
   imageQuality: 0.8,
 };
 
-const TARGET_LABELS = {
-  visible: 'Visible Tab',
-  process: 'Process Record',
-  fullpage: 'Full Page',
-  screen: 'Entire Screen',
-};
-
 let savingPdf = false;
+let recordingAutoCloseTimer = null;
+let recordingAutoCloseEnabled = false;
+let pointerOverPopup = false;
+let popupWindowId = null;
+let popupTabId = null;
+
+const RECORDING_POPUP_AUTO_CLOSE_MS = 3000;
+
+// sidePanel.open() must run synchronously on click (before any await) or Chrome blocks it.
+function openSidePanelNow() {
+  if (!chrome.sidePanel?.open) return;
+  const opts = popupTabId != null
+    ? { tabId: popupTabId }
+    : popupWindowId != null
+      ? { windowId: popupWindowId }
+      : null;
+  if (!opts) return;
+  chrome.sidePanel.open(opts).catch((e) => {
+    console.warn('[ScreenClick popup] sidePanel.open:', e?.message || e);
+  });
+}
+
+function cachePopupTarget() {
+  chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+    if (tabs[0]?.id != null) popupTabId = tabs[0].id;
+  });
+  chrome.windows.getCurrent((w) => {
+    if (w?.id != null) popupWindowId = w.id;
+  });
+}
+
+cachePopupTarget();
+
+function clearRecordingAutoCloseTimer() {
+  if (recordingAutoCloseTimer) {
+    clearTimeout(recordingAutoCloseTimer);
+    recordingAutoCloseTimer = null;
+  }
+}
+
+function clearRecordingAutoClose() {
+  recordingAutoCloseEnabled = false;
+  clearRecordingAutoCloseTimer();
+}
+
+function armRecordingAutoClose() {
+  if (!recordingAutoCloseEnabled || pointerOverPopup || recordingAutoCloseTimer) return;
+  recordingAutoCloseTimer = setTimeout(() => {
+    recordingAutoCloseTimer = null;
+    if (pointerOverPopup) {
+      armRecordingAutoClose();
+      return;
+    }
+    if (recordingAutoCloseEnabled) window.close();
+  }, RECORDING_POPUP_AUTO_CLOSE_MS);
+}
+
+function scheduleRecordingAutoClose() {
+  if (!els.filenameSection.classList.contains('hidden')) return;
+  recordingAutoCloseEnabled = true;
+  armRecordingAutoClose();
+}
+
+document.body.addEventListener('mouseenter', () => {
+  pointerOverPopup = true;
+  clearRecordingAutoCloseTimer();
+});
+
+document.body.addEventListener('mouseleave', () => {
+  pointerOverPopup = false;
+  armRecordingAutoClose();
+});
 
 async function getState() {
   const data = await chrome.storage.local.get([
-    'isRecording', 'screenshots', 'settings', 'captureTarget',
+    'isRecording', 'screenshots', 'settings', 'captureTarget', 'lastCaptureError',
+    'captureInProgress',
   ]);
+  const settings = { ...DEFAULT_SETTINGS, ...(data.settings || {}) };
+  settings.screenTriggers = { ...DEFAULT_SETTINGS.screenTriggers, ...(settings.screenTriggers || {}) };
   return {
     isRecording: !!data.isRecording,
     screenshotCount: (data.screenshots || []).length,
-    settings: { ...DEFAULT_SETTINGS, ...(data.settings || {}) },
+    settings,
     captureTarget: data.captureTarget || 'visible',
+    lastCaptureError: data.lastCaptureError || null,
+    captureInProgress: !!data.captureInProgress,
   };
 }
 
@@ -81,7 +146,7 @@ function renderTriggers(settings, target) {
   if (target === 'process') {
     const p = settings.processTriggers || { click: true, inputChange: false, keyboard: false, timer: false };
     const items = [
-      { label: 'Click on interactive elements', on: p.click },
+      { label: 'Single click on interactive elements', on: p.click },
       { label: 'Form input fill (blur, idle, Enter)', on: p.inputChange },
       { label: `Keyboard (${CAPTURE_SHORTCUT})`, on: p.keyboard },
       { label: `Timer (every ${Math.round(settings.timerInterval / 1000)}s)`, on: p.timer },
@@ -91,10 +156,23 @@ function renderTriggers(settings, target) {
       .join('');
     return;
   }
-  const t = settings.triggers;
-  const dblActive = t.doubleClick && target === 'visible';
+  if (target === 'screen') {
+    const s = settings.screenTriggers || {};
+    const sec = Math.round((settings.screenTimerInterval || settings.timerInterval) / 1000);
+    const items = [
+      { label: `Keyboard (${CAPTURE_SHORTCUT})`, on: s.keyboard !== false },
+      { label: `Timer (every ${sec}s)`, on: !!s.timer },
+      { label: 'Capture button (below)', on: true },
+    ];
+    els.triggerList.innerHTML = items
+      .map((i) => `<div class="trigger-item ${i.on ? '' : 'off'}">${i.label}</div>`)
+      .join('');
+    return;
+  }
+  const t = settings.triggers || {};
+  const clickOn = (t.click ?? t.doubleClick ?? true) && target === 'visible';
   const items = [
-    { label: target === 'visible' ? 'Double-click' : 'Double-click (visible tab only)', on: dblActive },
+    { label: target === 'visible' ? 'Click' : 'Click (visible tab only)', on: clickOn },
     { label: `Keyboard (${CAPTURE_SHORTCUT})`, on: t.keyboard },
     { label: `Timer (every ${Math.round(settings.timerInterval / 1000)}s)`, on: t.timer },
   ];
@@ -107,25 +185,40 @@ async function render() {
   const state = await getState();
   renderTriggers(state.settings, state.captureTarget);
 
+  const filenameOpen = !els.filenameSection.classList.contains('hidden');
+
+  if (state.lastCaptureError) {
+    showError(state.lastCaptureError);
+  } else {
+    clearError();
+  }
+
   if (state.isRecording) {
-    els.startBtn.classList.add('hidden');
+    els.targetPicker.classList.add('hidden');
+    els.primaryActions.classList.remove('hidden');
+    els.infoPanel.classList.remove('hidden');
+    els.captureBtn.classList.remove('hidden');
     els.stopBtn.classList.remove('hidden');
     els.discardBtn.classList.remove('hidden');
     els.counterSection.classList.remove('hidden');
-    els.counter.textContent = state.screenshotCount;
-    els.modeIndicator.classList.remove('hidden');
-    els.modeValue.textContent = TARGET_LABELS[state.captureTarget] || 'Visible Tab';
+    els.counterSection.classList.toggle('is-capturing', state.captureInProgress);
+    els.counter.textContent = state.captureInProgress
+      ? `${state.screenshotCount} …`
+      : String(state.screenshotCount);
+    scheduleRecordingAutoClose();
   } else {
-    els.startBtn.classList.remove('hidden');
+    clearRecordingAutoClose();
+    els.captureBtn.classList.add('hidden');
     els.stopBtn.classList.add('hidden');
     els.discardBtn.classList.add('hidden');
-    els.modeIndicator.classList.add('hidden');
+    els.infoPanel.classList.add('hidden');
     if (state.screenshotCount > 0) {
       els.counterSection.classList.remove('hidden');
       els.counter.textContent = state.screenshotCount;
     } else {
       els.counterSection.classList.add('hidden');
     }
+    if (!filenameOpen) showTargetPicker();
   }
 }
 
@@ -149,10 +242,10 @@ function showTargetPicker() {
 function hideTargetPicker() {
   els.targetPicker.classList.add('hidden');
   els.primaryActions.classList.remove('hidden');
-  els.infoPanel.classList.remove('hidden');
 }
 
 function showFilenameInput() {
+  clearRecordingAutoClose();
   const stamp = new Date().toISOString().slice(0, 16).replace(/[:T]/g, '-');
   els.filenameInput.value = `QA-Report-${stamp}`;
   els.filenameSection.classList.remove('hidden');
@@ -164,21 +257,27 @@ function showFilenameInput() {
 function hideFilenameInput() {
   els.filenameSection.classList.add('hidden');
   els.primaryActions.classList.remove('hidden');
-  els.infoPanel.classList.remove('hidden');
   render();
 }
 
-els.startBtn.addEventListener('click', () => {
-  showTargetPicker();
+els.captureBtn.addEventListener('click', async () => {
+  clearError();
+  try {
+    await chrome.runtime.sendMessage({ type: 'CAPTURE_NOW', source: 'manual' });
+    setTimeout(render, 400);
+  } catch (e) {
+    showError(e.message || 'Capture failed.');
+  }
 });
 
 els.targetCancel.addEventListener('click', () => {
-  hideTargetPicker();
+  window.close();
 });
 
 document.querySelectorAll('.target-btn').forEach((btn) => {
   btn.addEventListener('click', async () => {
     const target = btn.dataset.target;
+    openSidePanelNow();
     btn.disabled = true;
     btn.style.opacity = '0.6';
     clearError();
@@ -188,9 +287,6 @@ document.querySelectorAll('.target-btn').forEach((btn) => {
         target,
       });
       if (response && response.ok) {
-        // For screen mode, the SW returns ok+pending and the launcher window
-        // continues the flow. We can hide the picker either way; the popup
-        // will update via storage onChanged once recording actually starts.
         hideTargetPicker();
         render();
       } else {
@@ -207,6 +303,7 @@ document.querySelectorAll('.target-btn').forEach((btn) => {
 });
 
 els.stopBtn.addEventListener('click', () => {
+  clearRecordingAutoClose();
   clearError();
   showFilenameInput();
 });
@@ -248,6 +345,7 @@ els.filenameInput.addEventListener('keydown', (e) => {
 });
 
 els.discardBtn.addEventListener('click', async () => {
+  clearRecordingAutoClose();
   if (!confirm('Discard all screenshots from this session?')) return;
   clearError();
   await chrome.runtime.sendMessage({ type: 'DISCARD_SESSION' });
@@ -259,28 +357,15 @@ els.settingsLink.addEventListener('click', (e) => {
   chrome.runtime.openOptionsPage();
 });
 
-// Theme toggle: light ⇄ dark, persisted to storage so it survives reload.
-const themeToggle = document.getElementById('theme-toggle');
-if (themeToggle) {
-  function refreshToggleTooltip() {
-    const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
-    const label = isDark ? 'Switch to light mode' : 'Switch to dark mode';
-    themeToggle.setAttribute('title', label);
-    themeToggle.setAttribute('aria-label', label);
-  }
-  refreshToggleTooltip();
-  themeToggle.addEventListener('click', async () => {
-    const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
-    const next = isDark ? 'light' : 'dark';
-    if (next === 'dark') document.documentElement.setAttribute('data-theme', 'dark');
-    else document.documentElement.removeAttribute('data-theme');
-    refreshToggleTooltip();
-    try { await chrome.storage.local.set({ theme: next }); } catch {}
-  });
-}
+globalThis.ScreenClickTheme?.bindThemeToggle(document.getElementById('theme-toggle'));
 
 chrome.storage.onChanged.addListener((changes, area) => {
-  if (area === 'local' && !savingPdf) render();
+  if (area === 'local' && !savingPdf) {
+    if (changes.lastCaptureError?.newValue) {
+      showError(changes.lastCaptureError.newValue);
+    }
+    render();
+  }
 });
 
 render();

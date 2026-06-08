@@ -4,27 +4,23 @@
   <meta charset="UTF-8">
   <title>ScreenClick</title>
   <link rel="stylesheet" href="popup.css">
+  <script src="../shared/theme.js"></script>
 </head>
 <body>
   <div class="container">
     <header class="header">
       <h1>
-        <img src="../icons/icon-48.png" alt="" class="header-icon">
+        <img src="../icons/icon-48.png" alt="" class="header-icon brand-icon">
         ScreenClick
       </h1>
     </header>
 
     <div id="error-banner" class="error-banner hidden"></div>
 
-    <div id="counter-section" class="counter hidden">
-      <div class="counter-number" id="counter">0</div>
-      <div class="counter-label">screenshots</div>
-    </div>
-
-    <div id="mode-indicator" class="mode-indicator hidden">
-      <span class="mode-label">Mode</span>
-      <span id="mode-value" class="mode-value">Visible Tab</span>
-    </div>
+    <p id="counter-section" class="counter-line hidden" aria-live="polite">
+      <span class="counter-number" id="counter">0</span>
+      <span class="counter-label">screenshots</span>
+    </p>
 
     <div class="info-panel" id="info-panel">
       <div class="info-section trigger-section">
@@ -35,11 +31,11 @@
       <div class="info-section shortcut-section">
         <div class="shortcut-row">
           <code class="shortcut-chip" data-key="1"></code>
-          <span>Start or stop capturing</span>
+          <span>Start capturing or stop and save PDF</span>
         </div>
         <div class="shortcut-row">
           <code class="shortcut-chip" data-key="2"></code>
-          <span>Save PDF now</span>
+          <span>Capture screenshot (while recording)</span>
         </div>
       </div>
     </div>
@@ -48,19 +44,15 @@
       <div class="picker-title">Choose what to capture</div>
       <button class="target-btn" data-target="visible">
         <div class="target-name">Visible Tab</div>
-        <div class="target-desc">Current viewport of the active tab. All triggers work.</div>
+        <div class="target-desc">Current viewport of the active tab. Click anywhere to capture.</div>
       </button>
       <button class="target-btn" data-target="process">
         <div class="target-name">Process Record</div>
-        <div class="target-desc">Capture every click as a labeled step. Step-by-step PDF guide.</div>
-      </button>
-      <button class="target-btn" data-target="fullpage">
-        <div class="target-name">Full Page</div>
-        <div class="target-desc">Scroll and stitch the entire page. Keyboard and timer only.</div>
+        <div class="target-desc">Single-click on elements as numbered Points. Step-by-step PDF guide.</div>
       </button>
       <button class="target-btn" data-target="screen">
-        <div class="target-name">Entire Screen</div>
-        <div class="target-desc">Pick a screen or window. Keyboard and timer only.</div>
+        <div class="target-name">Screen or Window</div>
+        <div class="target-desc">Still screenshots of your monitor or an app window. Pick a display in Chrome’s dialog. ⌘⇧2 / Ctrl+Shift+2 per shot.</div>
       </button>
       <button id="target-cancel" class="btn btn-ghost btn-small">Cancel</button>
     </div>
@@ -70,12 +62,12 @@
       <input type="text" id="filename-input" class="filename-input" placeholder="QA-Report">
       <div class="filename-actions">
         <button id="filename-cancel" class="btn btn-ghost btn-small">Cancel</button>
-        <button id="filename-save" class="btn btn-primary btn-small">Save PDF</button>
+        <button id="filename-save" class="btn btn-save btn-small">Save PDF</button>
       </div>
     </div>
 
     <div class="actions" id="primary-actions">
-      <button id="start-btn" class="btn btn-primary">Start Capturing</button>
+      <button id="capture-btn" class="btn btn-primary hidden">Capture screenshot</button>
       <button id="stop-btn" class="btn btn-danger hidden">Stop and Save PDF</button>
       <button id="discard-btn" class="btn btn-ghost hidden">Discard Session</button>
     </div>
@@ -92,7 +84,7 @@
             <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/>
           </svg>
         </button>
-        <span class="version">v1.4.8</span>
+        <span class="version">v1.5.0</span>
       </div>
     </footer>
   </div>

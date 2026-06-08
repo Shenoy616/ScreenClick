@@ -3,7 +3,7 @@
 A Chrome extension for QA testers. Capture screenshots while exploring a page via:
 
 - Double-click anywhere on the page (visible-tab mode only)
-- Keyboard shortcut (Ctrl+Shift+S, or Cmd+Shift+S on Mac)
+- Keyboard shortcut (Ctrl+Shift+2, or Command+Shift+2 on Mac)
 - Timer (every N seconds)
 
 Choose what to capture on each session: the visible browser tab, the full scrolled page, or the entire screen. Each capture is marked with a green ring at the click location (visible-tab mode), then compiled into a single PDF when you stop the session.
@@ -22,11 +22,11 @@ Manifest V3 extension with five moving parts:
 
 **Visible tab.** Captures the current viewport of the active tab. Fastest path; all three standard triggers (double-click, keyboard, timer) work. Cannot capture chrome:// pages or the Chrome Web Store.
 
-**Process Record.** Step-by-step capture mode for documenting workflows. Every click on the page is captured as a labeled step. Each PDF page shows "Step N: <action label>" (e.g., "Step 3: Clicked button: Submit Order") above the screenshot. The element under the click is identified by aria-label, visible text, placeholder, or name attribute, in that order. Triggers: click (with an "only interactive elements" filter), form-input change on blur, keyboard shortcut, and timer. Configure in Settings → Process Record Mode.
+**Process Record.** Step-by-step capture mode for documenting workflows. Every click on the page is captured as a numbered Point. Each PDF page shows "Step N: <Point text>" (e.g., "Step 3: Clicked button: Submit Order") above the screenshot. The element under the click is identified by aria-label, visible text, placeholder, or name attribute, in that order. Triggers: click (with an "only interactive elements" filter), form-input change on blur, keyboard shortcut, and timer. Configure in Settings → Process Record Mode.
 
 **Full page.** Scrolls the page in viewport-height steps, captures each tile, then stitches the tiles into one tall image on a canvas in the offscreen document. Each full-page capture takes a few seconds depending on page length. Sticky and fixed-position elements are temporarily hidden during capture so they don't appear in every tile. Capped at 30 tiles or 32000px height for safety. Keyboard and timer triggers only.
 
-**Entire screen.** Uses `chrome.desktopCapture.chooseDesktopMedia` to let the user pick a screen or window. Because Manifest V3 service workers cannot reliably show the picker, and popups close when focus shifts, this mode opens a small launcher window that shows the picker, sends the streamId back to the service worker, then closes itself. Once selected, the screen MediaStream stays open for the whole session. Keyboard and timer triggers only.
+**Screen or Window.** Still JPEG screenshots of your monitor or an app window. A small helper window runs Chrome’s desktop picker (`chrome.desktopCapture`, screen/window only — no camera), and stays open while you press ⌘⇧2 / Ctrl+Shift+2 for each shot.
 
 ## How to Install (Developer Mode)
 
@@ -43,10 +43,13 @@ Manifest V3 extension with five moving parts:
 3. Click **Start Capturing**, then choose a capture mode: Visible Tab, Process Record, Full Page, or Entire Screen.
    - For Entire Screen, a small "Setting up screen capture" window appears, then Chrome's screen picker dialog. Choose a screen or window.
    - For Process Record, the on-page indicator says "QA PROCESS RECORDING" and every click on an interactive element captures a step.
-4. Once recording, the badge on the icon turns red. For visible-tab and process modes, a "QA RECORDING" indicator appears on the page.
+4. Once recording, the badge on the icon turns red. For visible-tab and process modes, a "QA RECORDING" indicator appears on the page. The **Steps** side panel opens automatically — click any Point there to edit.
 5. Trigger captures via your chosen triggers (configurable in Settings).
-6. Click the extension icon again, click **Stop and Save PDF**, type a filename, click **Save PDF**.
-7. The browser save dialog opens.
+6. In the side panel, edit Points, reorder with ↑/↓, or remove steps before export.
+7. Click the extension icon again, click **Stop and Save PDF**, type a filename, click **Save PDF**.
+8. The browser save dialog opens.
+
+Each screenshot page header shows the capture time in **UTC (ISO 8601)**. The PDF ends with a **Session Attestation** page: SHA-256 hashes of every capture, a chained integrity manifest, and an ECDSA P-256 signature — all computed on-device with no network calls. This helps prove the export was not altered after generation. Times still reflect your local system clock.
 
 ## Process Record Details
 
@@ -62,7 +65,7 @@ Configure in Settings → Process Record Mode:
 - **Click**: capture on every click (debounced to 250ms)
 - **Only interactive elements**: ignore plain-text clicks; capture only buttons, links, inputs, role=button
 - **Form input change**: capture when the user leaves a text field after typing in it (on blur)
-- **Keyboard shortcut**: Ctrl+Shift+S also produces a step labeled "Manual step N"
+- **Keyboard shortcut**: Ctrl+Shift+2 (Command+Shift+2 on Mac) also produces a Point titled "Manual step N"
 - **Timer**: periodic capture for long processes
 
 ## Triggers (Settings page)

@@ -1,9 +1,9 @@
 // Content script. Handles:
 //   - mouse tracking (keyboard trigger ring position)
-//   - double-click trigger (visible-tab mode)
+//   - single-click trigger (visible-tab mode)
 //   - single-click trigger and form-input trigger (process-record mode)
 //   - green click ring rendering with element label
-//   - on-page "QA RECORDING" indicator
+//   - on-page recording dot (blinks while capturing)
 //   - full-page scroll orchestration for fullpage mode
 
 (function () {
@@ -13,8 +13,10 @@
   const STATE = {
     isRecording: false,
     captureTarget: 'visible',
-    triggers: { doubleClick: false, keyboard: false, timer: false },
+    triggers: { click: true, keyboard: false, timer: false },
+    lastVisibleClickAt: 0,
     processTriggers: { click: true, inputChange: true, keyboard: true, timer: false },
+    screenTriggers: { keyboard: true, timer: false },
     processOptions: { onlyInteractive: true, debounceMs: 250 },
     lastMouse: { x: window.innerWidth / 2, y: window.innerHeight / 2 },
     indicator: null,
@@ -30,30 +32,50 @@
     STATE.lastMouse.y = e.clientY;
   }, { passive: true, capture: true });
 
+  function applyRecordingPayload(data) {
+    const wasRecording = STATE.isRecording;
+    STATE.isRecording = !!data.isRecording;
+    STATE.captureTarget = data.captureTarget || 'visible';
+    const s = data.settings || {};
+    const raw = s.triggers || {};
+    STATE.triggers = {
+      click: raw.click ?? raw.doubleClick ?? true,
+      keyboard: raw.keyboard !== false,
+      timer: !!raw.timer,
+    };
+    STATE.processTriggers = {
+      click: s.processTriggers?.click !== false,
+      inputChange: s.processTriggers?.inputChange !== false,
+      keyboard: s.processTriggers?.keyboard !== false,
+      timer: !!s.processTriggers?.timer,
+    };
+    STATE.processOptions = {
+      onlyInteractive: s.processOptions?.onlyInteractive !== false,
+      debounceMs: s.processOptions?.debounceMs || 250,
+    };
+    STATE.screenTriggers = {
+      keyboard: s.screenTriggers?.keyboard !== false,
+      timer: !!s.screenTriggers?.timer,
+    };
+    if (STATE.isRecording && !wasRecording) {
+      STATE.stepCounter = 0;
+      STATE.inputSessions = {};
+      showIndicator();
+    }
+    if (!STATE.isRecording && wasRecording) {
+      for (const k in STATE.inputSessions) {
+        const sess = STATE.inputSessions[k];
+        if (sess && sess.idleTimer) clearTimeout(sess.idleTimer);
+      }
+      STATE.inputSessions = {};
+      hideIndicator();
+    }
+  }
+
   async function refreshState() {
     try {
       const data = await chrome.storage.local.get(['isRecording', 'settings', 'captureTarget']);
-      const wasRecording = STATE.isRecording;
-      STATE.isRecording = !!data.isRecording;
-      STATE.captureTarget = data.captureTarget || 'visible';
-      const s = data.settings || {};
-      STATE.triggers = s.triggers || { doubleClick: true, keyboard: true, timer: false };
-      STATE.processTriggers = s.processTriggers || { click: true, inputChange: true, keyboard: true, timer: false };
-      STATE.processOptions = s.processOptions || { onlyInteractive: true, debounceMs: 250 };
-      if (STATE.isRecording && !wasRecording) {
-        STATE.stepCounter = 0;
-        STATE.inputSessions = {};
-        showIndicator();
-      }
-      if (!STATE.isRecording && wasRecording) {
-        // Clear any pending idle timers so they don't fire after stop.
-        for (const k in STATE.inputSessions) {
-          const sess = STATE.inputSessions[k];
-          if (sess && sess.idleTimer) clearTimeout(sess.idleTimer);
-        }
-        STATE.inputSessions = {};
-        hideIndicator();
-      }
+      applyRecordingPayload(data);
     } catch {}
   }
 
@@ -68,10 +90,13 @@
   refreshState();
 
   function showIndicator() {
-    if (STATE.indicator) return;
+    if (STATE.indicator || !STATE.isRecording) return;
     const el = document.createElement('div');
-    el.className = 'qa-recording-indicator';
-    el.textContent = STATE.captureTarget === 'process' ? 'SCREENCLICK • PROCESS' : 'SCREENCLICK • CAPTURING';
+    el.className = STATE.captureTarget === 'process'
+      ? 'qa-recording-indicator qa-process-recording'
+      : 'qa-recording-indicator';
+    el.setAttribute('role', 'status');
+    el.setAttribute('aria-label', STATE.captureTarget === 'process' ? 'Process recording' : 'Recording');
     (document.body || document.documentElement).appendChild(el);
     STATE.indicator = el;
   }
@@ -125,12 +150,17 @@
     }
   }
 
-  // ---------- Visible-tab double-click ----------
+  // ---------- Visible-tab single-click ----------
 
-  document.addEventListener('dblclick', (e) => {
-    if (!STATE.isRecording || !STATE.triggers.doubleClick) return;
-    if (STATE.captureTarget !== 'visible') return;
-    triggerCapture(e.clientX, e.clientY, 'doubleClick');
+  document.addEventListener('click', (e) => {
+    if (!STATE.isRecording || STATE.captureTarget !== 'visible') return;
+    if (!STATE.triggers.click) return;
+    if (e.target?.closest?.('.qa-click-ring, .qa-recording-indicator')) return;
+    const now = Date.now();
+    const gap = STATE.processOptions.debounceMs || 250;
+    if (now - STATE.lastVisibleClickAt < gap) return;
+    STATE.lastVisibleClickAt = now;
+    triggerCapture(e.clientX, e.clientY, 'click');
   }, true);
 
   // ---------- Process Record: click trigger ----------
@@ -140,34 +170,107 @@
   // navigate, buttons submit, etc.). Debounce prevents capturing the same
   // click twice from a fast double-tap or from synthetic clicks.
 
+  // True only for the element that owns the action (not a child sitting inside a link/button).
+  function isIntrinsicInteractive(el) {
+    if (!el || el.nodeType !== 1 || el.disabled) return false;
+    const tag = el.tagName;
+    if (tag === 'A' || tag === 'BUTTON' || tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA' || tag === 'LABEL' || tag === 'SUMMARY') return true;
+    const role = el.getAttribute('role');
+    if (role && /^(button|link|checkbox|radio|tab|menuitem|switch|option|listitem|gridcell|treeitem|cell)$/i.test(role.trim().split(/\s+/)[0])) return true;
+    if (el.hasAttribute('onclick')) return true;
+    const tabidx = el.getAttribute('tabindex');
+    if (tabidx && parseInt(tabidx, 10) >= 0) return true;
+    return false;
+  }
+
+  function findLinkElement(el) {
+    if (!el || el.nodeType !== 1) return null;
+    const anchor = el.closest('a[href]');
+    if (anchor) return anchor;
+    const roleLink = el.closest('[role="link"][href], [role="link"]');
+    return roleLink || null;
+  }
+
+  // Prefer the control that carries the human-readable Point (link, button, field).
+  function labelTargetFor(el) {
+    if (!el || el.nodeType !== 1) return el;
+    return (
+      findLinkElement(el) ||
+      el.closest('button, [role="button"], input, select, textarea, summary') ||
+      el
+    );
+  }
+
+  function resolveProcessClickTarget(e) {
+    const path = typeof e.composedPath === 'function' ? e.composedPath() : [];
+
+    for (const node of path) {
+      if (node && node.nodeType === 1 && isIntrinsicInteractive(node)) {
+        return { element: node, identified: true };
+      }
+    }
+
+    let el = e.target;
+    while (el && el.nodeType === 1) {
+      if (isIntrinsicInteractive(el)) return { element: el, identified: true };
+      el = el.parentElement;
+    }
+
+    const link = findLinkElement(e.target);
+    if (link) return { element: link, identified: true };
+
+    return { element: e.target || null, identified: false };
+  }
+
+  function hasMeaningfulPoint(info) {
+    if (!info) return false;
+    if ((info.text || '').trim()) return true;
+    return info.kind && info.kind !== 'element';
+  }
+
   document.addEventListener('click', (e) => {
     if (!STATE.isRecording) return;
     if (STATE.captureTarget !== 'process') return;
     if (!STATE.processTriggers.click) return;
 
-    // Debounce: ignore clicks too close together.
     const now = Date.now();
     if (now - STATE.lastClickAt < STATE.processOptions.debounceMs) return;
     STATE.lastClickAt = now;
 
-    // Filter to interactive elements if enabled.
-    if (STATE.processOptions.onlyInteractive && !isInteractive(e.target)) return;
+    if (e.target?.closest?.('.qa-click-ring, .qa-recording-indicator')) return;
 
-    // Ignore clicks on our own overlays.
-    if (e.target && e.target.closest && e.target.closest('.qa-click-ring, .qa-recording-indicator')) return;
+    const { element: clickTarget, identified } = resolveProcessClickTarget(e);
 
-    // If input-change tracking is on AND this click landed on a text input,
-    // skip the click step — we'll capture a "Filled" step when the user
-    // leaves the field with new content. Avoids the duplicate
-    // "Clicked input: email" + "Typed in input: email" pair.
-    if (STATE.processTriggers.inputChange && isTextInput(e.target)) return;
+    if (identified && clickTarget) {
+      if (STATE.processTriggers.inputChange && isTextInput(clickTarget)) return;
 
-    const info = describeElement(e.target);
+      const info = describeElement(labelTargetFor(clickTarget));
+      STATE.stepCounter++;
+      const payload = {
+        stepNumber: STATE.stepCounter,
+        elementInfo: info,
+      };
+      if (hasMeaningfulPoint(info)) {
+        payload.actionLabel = `Clicked ${info.label}`;
+      }
+      triggerCapture(e.clientX, e.clientY, 'process-click', payload);
+      return;
+    }
+
+    // No intrinsic control: still label when the click is inside a link.
+    const link = findLinkElement(e.target);
+    if (link) {
+      const info = describeElement(link);
+      STATE.stepCounter++;
+      const payload = { stepNumber: STATE.stepCounter, elementInfo: info };
+      if (hasMeaningfulPoint(info)) payload.actionLabel = `Clicked ${info.label}`;
+      triggerCapture(e.clientX, e.clientY, 'process-click', payload);
+      return;
+    }
+
     STATE.stepCounter++;
     triggerCapture(e.clientX, e.clientY, 'process-click', {
       stepNumber: STATE.stepCounter,
-      actionLabel: `Clicked ${info.label}`,
-      elementInfo: info,
     });
   }, true);
 
@@ -268,6 +371,20 @@
     captureInputFill(el, 'blur');
   }, true);
 
+  // Screen mode: listen for capture shortcut in the page (chrome.commands is flaky
+  // when focus is outside the side panel / extension UI).
+  document.addEventListener('keydown', (e) => {
+    if (window !== window.top) return;
+    if (!STATE.isRecording || STATE.captureTarget !== 'screen') return;
+    if (!STATE.screenTriggers.keyboard) return;
+    const sc = globalThis.ScreenClickShortcuts;
+    if (!sc || !sc.isCaptureShortcutKey(e)) return;
+    if (sc.isEditableTarget(e.target)) return;
+    e.preventDefault();
+    e.stopPropagation();
+    sc.requestKeyboardCapture();
+  }, true);
+
   document.addEventListener('keydown', (e) => {
     if (!STATE.isRecording || STATE.captureTarget !== 'process') return;
     if (!STATE.processTriggers.inputChange) return;
@@ -281,19 +398,39 @@
 
   function isInteractive(el) {
     if (!el || el.nodeType !== 1) return false;
-    if (el.disabled) return false;
-    const tag = el.tagName;
-    if (tag === 'A' || tag === 'BUTTON' || tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA' || tag === 'LABEL' || tag === 'SUMMARY') return true;
-    const role = el.getAttribute('role');
-    if (role && /^(button|link|checkbox|radio|tab|menuitem|switch|option)$/i.test(role.trim().split(/\s+/)[0])) return true;
-    if (el.hasAttribute('onclick')) return true;
-    const tabidx = el.getAttribute('tabindex');
-    // tabindex="-1" means programmatically focusable but not user-tabbable; many
-    // decorative wrappers use it. Only treat positive/zero as a strong signal.
-    if (tabidx && parseInt(tabidx, 10) >= 0) return true;
-    // Bubble up: a span inside a button should still count.
+    if (isIntrinsicInteractive(el)) return true;
     if (el.parentElement) return isInteractive(el.parentElement);
     return false;
+  }
+
+  function linkAccessibleName(el) {
+    if (!el || el.nodeType !== 1) return '';
+    const labelledBy = findAssociatedLabel(el);
+    if (labelledBy) return labelledBy;
+    const img = el.querySelector('img[alt]');
+    if (img) {
+      const alt = (img.getAttribute('alt') || '').trim();
+      if (alt) return alt;
+    }
+    const labelledChild = el.querySelector('[aria-label]');
+    if (labelledChild) {
+      const childAria = (labelledChild.getAttribute('aria-label') || '').trim();
+      if (childAria) return childAria;
+    }
+    return '';
+  }
+
+  function hrefLabel(el) {
+    const raw = (el.getAttribute('href') || '').trim();
+    if (!raw || raw === '#') return '';
+    try {
+      const url = new URL(raw, window.location.href);
+      const path = (url.pathname || '/').replace(/\/$/, '') || '/';
+      const tail = path === '/' ? url.hostname : path.split('/').filter(Boolean).pop() || path;
+      return decodeURIComponent(tail).replace(/[-_]/g, ' ') || url.hostname;
+    } catch {
+      return raw.length > 60 ? raw.slice(0, 60) + '...' : raw;
+    }
   }
 
   function isTextInput(el) {
@@ -390,7 +527,7 @@
   }
 
   function describeElement(el) {
-    if (!el || el.nodeType !== 1) return { label: 'element' };
+    if (!el || el.nodeType !== 1) return { label: 'element', kind: 'element', text: '', tag: '' };
 
     // Original element kept for fallback. We try a series of strategies to
     // find a meaningful target.
@@ -438,6 +575,11 @@
     let text = (target.innerText || target.textContent || '').trim().replace(/\s+/g, ' ');
     const value = target.value || '';
 
+    if ((tag === 'a' || role === 'link') && !text) {
+      const linkName = linkAccessibleName(target);
+      if (linkName) text = linkName;
+    }
+
     // If the target is a control with no visible text (e.g. hidden checkbox),
     // borrow the text from the associated label.
     if (!text || tag === 'input') {
@@ -445,8 +587,8 @@
       if (labelText) text = labelText;
     }
 
-    // Prefer the most specific human-readable label.
-    const preferred = aria || title || (text && text.length <= 60 ? text : '') || placeholder || (text ? text.slice(0, 60) + '...' : '') || name || value || '';
+    let preferred = aria || title || (text && text.length <= 60 ? text : '') || placeholder || (text ? text.slice(0, 60) + '...' : '') || name || value || '';
+    if (!preferred && (tag === 'a' || role === 'link')) preferred = hrefLabel(target);
 
     // Categorize the action by tag, then by role. Decorative roles already
     // filtered out by effectiveRole.
@@ -587,6 +729,16 @@
         sendResponse(fullpageScrollTo(msg.index));
       } else if (msg.type === 'FULLPAGE_END') {
         sendResponse(fullpageEnd());
+      } else if (msg.type === 'SYNC_STEP_COUNTER') {
+        STATE.stepCounter = typeof msg.stepCounter === 'number' ? msg.stepCounter : 0;
+        sendResponse({ ok: true });
+      } else if (msg.type === 'RECORDING_STATE') {
+        applyRecordingPayload({
+          isRecording: msg.isRecording,
+          captureTarget: msg.captureTarget,
+          settings: msg.settings,
+        });
+        sendResponse({ ok: true });
       } else {
         return false;
       }

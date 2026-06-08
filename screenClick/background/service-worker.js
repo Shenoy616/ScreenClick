@@ -4,17 +4,59 @@
 // offscreen document lifecycle, downloads, badge updates.
 
 const DEFAULT_SETTINGS = {
-  triggers: { doubleClick: true, keyboard: true, timer: false },
+  triggers: { click: true, keyboard: true, timer: false },
+  screenTriggers: { keyboard: true, timer: false },
   processTriggers: { click: true, inputChange: true, keyboard: true, timer: false },
   processOptions: { onlyInteractive: true, debounceMs: 250 },
   timerInterval: 10000,
+  screenTimerInterval: 10000,
   imageQuality: 0.8,
   includeTimestamp: true,
 };
 
+function getTimerIntervalMs(settings, captureTarget) {
+  if (captureTarget === 'screen') {
+    return settings.screenTimerInterval || settings.timerInterval || DEFAULT_SETTINGS.screenTimerInterval;
+  }
+  return settings.timerInterval || DEFAULT_SETTINGS.timerInterval;
+}
+
+function wantsTimerForTarget(settings, captureTarget) {
+  if (captureTarget === 'process') {
+    return !!(settings.processTriggers && settings.processTriggers.timer);
+  }
+  if (captureTarget === 'screen') {
+    const st = settings.screenTriggers || settings.triggers || {};
+    return !!st.timer;
+  }
+  return !!(settings.triggers && settings.triggers.timer);
+}
+
+function isHttpTabUrl(url) {
+  return !!url && (url.startsWith('http://') || url.startsWith('https://'));
+}
+
+async function resolvePickerTabForDesktopCapture(preferredTabId) {
+  if (preferredTabId != null) {
+    try {
+      const t = await chrome.tabs.get(preferredTabId);
+      if (isHttpTabUrl(t.url)) return t;
+    } catch { /* tab gone */ }
+  }
+  const focused = await chrome.tabs.query({ lastFocusedWindow: true });
+  const inWindow = focused.find((t) => isHttpTabUrl(t.url));
+  if (inWindow) return inWindow;
+  const all = await chrome.tabs.query({});
+  return all.find((t) => isHttpTabUrl(t.url)) || null;
+}
+
 // Chrome rate-limits captureVisibleTab to ~2/sec. Keep a serialized queue
-// with a minimum inter-capture gap.
+// with a minimum inter-capture gap (not needed for desktop stream captures).
 const MIN_CAPTURE_GAP_MS = 600;
+const SCREEN_CAPTURE_GAP_MS = 0;
+const CAPTURE_PENDING_STALE_MS = 12000;
+const LAUNCHER_PORT_WAIT_MS = 2500;
+const LAUNCHER_REQUEST_TIMEOUT_MS = 20000;
 // Settling time per full-page scroll tile, lets animations/lazy-load settle.
 const FULLPAGE_TILE_SETTLE_MS = 280;
 // Max number of tiles for a full-page capture (safety cap on infinite pages).
@@ -23,6 +65,121 @@ const FULLPAGE_MAX_TILES = 30;
 let timerHandle = null;
 let captureChain = Promise.resolve();
 let lastCaptureAt = 0;
+let lastKeyboardCaptureAt = 0;
+const KEYBOARD_CAPTURE_DEBOUNCE_MS = 350;
+/** @type {chrome.runtime.Port | null} */
+let launcherPort = null;
+
+chrome.runtime.onConnect.addListener((port) => {
+  if (port.name !== 'screenclick-launcher') return;
+  launcherPort = port;
+  port.onDisconnect.addListener(() => {
+    if (launcherPort === port) launcherPort = null;
+  });
+});
+
+function makeStepId() {
+  return `step_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
+}
+
+function renumberSteps(list) {
+  return list.map((shot, i) => {
+    const next = { ...shot };
+    if (next.stepNumber != null) next.stepNumber = i + 1;
+    return next;
+  });
+}
+
+function findStepIndex(list, id) {
+  if (id.startsWith('legacy_')) {
+    const index = parseInt(id.slice(7), 10);
+    return Number.isNaN(index) ? -1 : index;
+  }
+  return list.findIndex((s) => s.id === id);
+}
+
+async function syncProcessStepCounter() {
+  const { screenshots, captureTarget, isRecording, activeTabId } = await getState();
+  if (!isRecording || captureTarget !== 'process' || !activeTabId) return;
+  try {
+    await chrome.tabs.sendMessage(activeTabId, {
+      type: 'SYNC_STEP_COUNTER',
+      stepCounter: screenshots.length,
+    });
+  } catch { /* tab may be unavailable */ }
+}
+
+const SIDE_PANEL_PATH = 'sidepanel/sidepanel.html';
+
+async function ensureSidePanelEnabled(tabId, windowId) {
+  if (!chrome.sidePanel?.setOptions) return;
+  try {
+    const opts = { path: SIDE_PANEL_PATH, enabled: true };
+    if (tabId != null) await chrome.sidePanel.setOptions({ ...opts, tabId });
+    else await chrome.sidePanel.setOptions(opts);
+  } catch (e) {
+    console.warn('[ScreenClick] sidePanel.setOptions:', e?.message || e);
+  }
+}
+
+async function openStepsPanel(windowId, tabId) {
+  if (!chrome.sidePanel) return;
+  await ensureSidePanelEnabled(tabId, windowId);
+  try {
+    if (tabId != null) await chrome.sidePanel.open({ tabId });
+    else if (windowId != null) await chrome.sidePanel.open({ windowId });
+  } catch (e) {
+    console.warn('[ScreenClick] Could not open side panel:', e?.message || e);
+  }
+}
+
+async function ensureStepIds() {
+  const { screenshots } = await getState();
+  if (!screenshots.some((s) => !s.id)) return screenshots;
+  const list = screenshots.map((s) => (s.id ? s : { ...s, id: makeStepId() }));
+  await setState({ screenshots: list });
+  return list;
+}
+
+async function updateStepLabel(id, actionLabel) {
+  await ensureStepIds();
+  const { screenshots } = await getState();
+  const idx = findStepIndex(screenshots, id);
+  if (idx === -1) throw new Error('Step not found.');
+  const list = screenshots.map((s) => ({ ...s }));
+  list[idx].actionLabel = (actionLabel ?? '').trim();
+  list[idx].stepNumber = idx + 1;
+  if (!list[idx].id) list[idx].id = makeStepId();
+  await setState({ screenshots: list });
+  await updateBadge();
+}
+
+async function deleteStep(id) {
+  await ensureStepIds();
+  const { screenshots } = await getState();
+  const idx = findStepIndex(screenshots, id);
+  if (idx === -1) throw new Error('Step not found.');
+  const list = screenshots.filter((_, i) => i !== idx);
+  const renumbered = renumberSteps(list);
+  await setState({ screenshots: renumbered });
+  await syncProcessStepCounter();
+  await updateBadge();
+}
+
+async function moveStep(id, direction) {
+  await ensureStepIds();
+  const { screenshots } = await getState();
+  const idx = findStepIndex(screenshots, id);
+  if (idx === -1) throw new Error('Step not found.');
+  const next = idx + direction;
+  if (next < 0 || next >= screenshots.length) throw new Error('Cannot move step.');
+  const list = screenshots.map((s) => ({ ...s }));
+  const [item] = list.splice(idx, 1);
+  list.splice(next, 0, item);
+  await setState({ screenshots: renumberSteps(list) });
+  await syncProcessStepCounter();
+  await updateBadge();
+}
 
 // ---------- State helpers ----------
 
@@ -30,15 +187,143 @@ async function getState() {
   const data = await chrome.storage.local.get([
     'isRecording', 'screenshots', 'settings',
     'activeTabId', 'activeWindowId', 'captureTarget',
+    'screenPickerTabId', 'screenPickerWindowId', 'screenLauncherWindowId',
   ]);
   return {
     isRecording: !!data.isRecording,
     screenshots: data.screenshots || [],
-    settings: { ...DEFAULT_SETTINGS, ...(data.settings || {}) },
+    settings: {
+      ...DEFAULT_SETTINGS,
+      ...(data.settings || {}),
+      screenTriggers: {
+        ...DEFAULT_SETTINGS.screenTriggers,
+        ...((data.settings || {}).screenTriggers || {}),
+      },
+    },
     activeTabId: data.activeTabId || null,
     activeWindowId: data.activeWindowId || null,
     captureTarget: data.captureTarget || 'visible',
+    screenPickerTabId: data.screenPickerTabId || null,
+    screenPickerWindowId: data.screenPickerWindowId || null,
+    screenLauncherWindowId: data.screenLauncherWindowId || null,
   };
+}
+
+async function clearScreenPickerContext() {
+  await setState({
+    screenPickerTabId: null,
+    screenPickerWindowId: null,
+    screenLauncherWindowId: null,
+  });
+}
+
+async function isLauncherWindowOpen() {
+  const { screenLauncherWindowId } = await getState();
+  if (!screenLauncherWindowId) return false;
+  try {
+    await chrome.windows.get(screenLauncherWindowId);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function waitForLauncherPort(maxMs = LAUNCHER_PORT_WAIT_MS) {
+  if (launcherPort) return true;
+  const deadline = Date.now() + maxMs;
+  while (!launcherPort && Date.now() < deadline) {
+    if (!(await isLauncherWindowOpen())) return false;
+    await sleep(40);
+  }
+  return !!launcherPort;
+}
+
+async function clearStaleCapturePending() {
+  const { captureInProgress } = await chrome.storage.local.get('captureInProgress');
+  if (!captureInProgress) return;
+  if (Date.now() - captureInProgress > CAPTURE_PENDING_STALE_MS) {
+    await chrome.storage.local.remove('captureInProgress');
+  }
+}
+
+function sendToLauncherViaPort(msg, requestId) {
+  return new Promise((resolve) => {
+    const port = launcherPort;
+    if (!port) {
+      resolve({ ok: false, error: 'Screen helper is still loading. Wait a moment and try again.' });
+      return;
+    }
+    const timeout = setTimeout(() => {
+      port.onMessage.removeListener(onReply);
+      resolve({ ok: false, error: 'Screen capture timed out. Keep the helper window open.' });
+    }, LAUNCHER_REQUEST_TIMEOUT_MS);
+    const onReply = (reply) => {
+      if (!reply || reply.requestId !== requestId) return;
+      clearTimeout(timeout);
+      port.onMessage.removeListener(onReply);
+      resolve(reply);
+    };
+    port.onMessage.addListener(onReply);
+    port.postMessage({ ...msg, requestId });
+  });
+}
+
+async function sendToLauncherViaRuntime(msg) {
+  const response = await chrome.runtime.sendMessage({ ...msg, target: 'launcher' });
+  if (chrome.runtime.lastError) {
+    throw new Error(chrome.runtime.lastError.message);
+  }
+  return response || { ok: false, error: 'No response from screen capture window.' };
+}
+
+async function sendToLauncher(msg) {
+  if (!(await isLauncherWindowOpen())) {
+    return {
+      ok: false,
+      error: 'Screen helper window is closed. Start Screen or Window mode again and keep that window open (minimize is OK).',
+    };
+  }
+  await waitForLauncherPort();
+  if (launcherPort) {
+    const requestId = `cap_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    const res = await sendToLauncherViaPort(msg, requestId);
+    if (res && res.ok) return res;
+    if (res && res.error && !/loading|timed out|disconnect/i.test(res.error)) return res;
+  }
+  try {
+    return await sendToLauncherViaRuntime(msg);
+  } catch (e) {
+    return { ok: false, error: e?.message || String(e) };
+  }
+}
+
+async function stopScreenCaptureSession() {
+  try {
+    await sendToLauncher({ type: 'STOP_SCREEN_STREAM' });
+  } catch { /* launcher may already be closed */ }
+  const { screenLauncherWindowId } = await chrome.storage.local.get('screenLauncherWindowId');
+  if (screenLauncherWindowId) {
+    try { await chrome.windows.remove(screenLauncherWindowId); } catch {}
+  }
+  await setState({ screenLauncherWindowId: null });
+}
+
+async function resolveTabForSession(fallbackPicker = false) {
+  const state = await getState();
+  let tabId = fallbackPicker ? state.screenPickerTabId : null;
+  let windowId = fallbackPicker ? state.screenPickerWindowId : null;
+
+  if (tabId != null) {
+    try {
+      const tab = await chrome.tabs.get(tabId);
+      return tab;
+    } catch { /* picker tab closed */ }
+  }
+
+  const tabs = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
+  const tab = tabs[0];
+  if (!tab) throw new Error('No active tab.');
+  return tab;
 }
 
 async function setState(patch) {
@@ -59,24 +344,30 @@ async function updateBadge() {
 
 // ---------- Start / Stop ----------
 
-async function startRecording(target, screenStreamId) {
+async function startRecording(target, _screenStreamId, options = {}) {
   target = target || 'visible';
-  const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
-  const tab = tabs[0];
-  if (!tab) throw new Error('No active tab.');
+  const launcherStreamReady = !!options.launcherStreamReady;
+  const usePickerContext = target === 'screen' && launcherStreamReady;
+  const tab = await resolveTabForSession(usePickerContext);
 
-  // Visible-tab and full-page require a normal http/https page.
+  // Visible-tab and process require a normal http/https page.
   if (target !== 'screen') {
     if (!tab.url || tab.url.startsWith('chrome://') || tab.url.startsWith('chrome-extension://') || tab.url.startsWith('https://chromewebstore.google.com')) {
       throw new Error('Cannot capture this page. Open a regular http/https page first.');
     }
   }
 
-  // Screen mode: if we don't have a stream ID yet, open the launcher
-  // window which will show the picker, then call us back via
-  // SCREEN_PICKER_RESULT. Return early; the launcher restarts this flow.
-  if (target === 'screen' && !screenStreamId) {
-    await openScreenLauncher();
+  // Screen mode: extension desktopCapture picker (not getDisplayMedia).
+  if (target === 'screen' && !launcherStreamReady) {
+    const pickerTab = await resolvePickerTabForDesktopCapture(tab.id);
+    if (!pickerTab) {
+      throw new Error('Open a normal website tab (http or https) in Chrome, then start Screen or Window mode.');
+    }
+    await setState({
+      screenPickerTabId: pickerTab.id,
+      screenPickerWindowId: pickerTab.windowId,
+    });
+    await openScreenLauncher(pickerTab.id);
     return { pending: true };
   }
 
@@ -87,43 +378,58 @@ async function startRecording(target, screenStreamId) {
     activeWindowId: tab.windowId,
     captureTarget: target,
     sessionStartedAt: Date.now(),
+    sessionStartedAtUtc: new Date().toISOString(),
+    screenPickerTabId: null,
+    screenPickerWindowId: null,
   });
 
   const { settings } = await getState();
-  const wantsTimer = target === 'process'
-    ? !!(settings.processTriggers && settings.processTriggers.timer)
-    : !!settings.triggers.timer;
-  if (wantsTimer) startTimer(settings.timerInterval);
+  if (wantsTimerForTarget(settings, target)) startTimer(getTimerIntervalMs(settings, target));
   await updateBadge();
-
-  if (tab.url && !tab.url.startsWith('chrome://') && !tab.url.startsWith('chrome-extension://')) {
-    await ensureContentScript(tab.id);
-  }
 
   if (target === 'fullpage') {
     await ensureOffscreen();
     await sendToOffscreen({ type: 'RESET_STITCH_BUFFER' });
   }
-  if (target === 'screen') {
-    await ensureOffscreen();
-    const r = await sendToOffscreen({ type: 'START_SCREEN_STREAM', streamId: screenStreamId });
-    if (!r || !r.ok) {
-      await discardSession();
-      throw new Error('Failed to start screen stream: ' + (r && r.error));
-    }
+
+  if (tab.url && !tab.url.startsWith('chrome://') && !tab.url.startsWith('chrome-extension://')) {
+    await ensureContentScript(tab.id);
+    await pushRecordingStateToTab(tab.id);
+    if (target === 'process') await syncProcessStepCounter();
   }
 
+  await openStepsPanel(tab.windowId, tab.id);
+  await ensureStepIds();
   return { ok: true };
 }
 
-async function openScreenLauncher() {
-  await chrome.windows.create({
-    url: chrome.runtime.getURL('launcher/launcher.html'),
-    type: 'popup',
-    width: 480,
-    height: 220,
+async function openScreenLauncher(tabId) {
+  const url = new URL(chrome.runtime.getURL('launcher/launcher.html'));
+  if (tabId != null) url.searchParams.set('tabId', String(tabId));
+  const win = await chrome.windows.create({
+    url: url.toString(),
+    type: 'normal',
+    width: 920,
+    height: 720,
     focused: true,
   });
+  if (win && win.id != null) {
+    await setState({ screenLauncherWindowId: win.id });
+  }
+}
+
+async function pushRecordingStateToTab(tabId) {
+  const { isRecording, captureTarget, settings } = await getState();
+  try {
+    await chrome.tabs.sendMessage(tabId, {
+      type: 'RECORDING_STATE',
+      isRecording,
+      captureTarget,
+      settings,
+    });
+  } catch (e) {
+    console.warn('[QA Tool] RECORDING_STATE push failed:', e?.message || e);
+  }
 }
 
 async function ensureContentScript(tabId) {
@@ -132,11 +438,11 @@ async function ensureContentScript(tabId) {
   } catch {
     try {
       await chrome.scripting.executeScript({
-        target: { tabId },
+        target: { tabId, allFrames: true },
         files: ['content/content.js'],
       });
       await chrome.scripting.insertCSS({
-        target: { tabId },
+        target: { tabId, allFrames: true },
         files: ['content/click-ring.css'],
       });
     } catch (e) {
@@ -149,9 +455,8 @@ async function stopAndSave(filename) {
   stopTimer();
   const { screenshots, settings, captureTarget } = await getState();
 
-  // Stop screen stream and clean up offscreen state if applicable.
   if (captureTarget === 'screen') {
-    try { await sendToOffscreen({ type: 'STOP_SCREEN_STREAM' }); } catch {}
+    await stopScreenCaptureSession();
   }
 
   if (screenshots.length === 0) {
@@ -162,7 +467,14 @@ async function stopAndSave(filename) {
   }
 
   try {
-    const pdfDataUrl = await buildPdfViaOffscreen(screenshots, settings);
+    const { sessionStartedAt, sessionStartedAtUtc } = await getState();
+    const session = {
+      startedAt: sessionStartedAt,
+      startedAtUtc: sessionStartedAtUtc,
+      endedAt: Date.now(),
+      endedAtUtc: new Date().toISOString(),
+    };
+    const pdfDataUrl = await buildPdfViaOffscreen(screenshots, settings, session);
     await chrome.downloads.download({
       url: pdfDataUrl,
       filename: `${sanitizeFilename(filename)}.pdf`,
@@ -186,7 +498,7 @@ async function discardSession() {
   stopTimer();
   const { captureTarget } = await getState();
   if (captureTarget === 'screen') {
-    try { await sendToOffscreen({ type: 'STOP_SCREEN_STREAM' }); } catch {}
+    await stopScreenCaptureSession();
   }
   await setState({ isRecording: false, screenshots: [] });
   await updateBadge();
@@ -207,14 +519,21 @@ async function hasOffscreen() {
 }
 
 async function ensureOffscreen() {
-  if (await hasOffscreen()) return;
-  await chrome.offscreen.createDocument({
-    url: OFFSCREEN_PATH,
-    reasons: ['BLOBS', 'USER_MEDIA'],
-    justification: 'Build PDF with jsPDF, stitch full-page screenshots, and capture screen streams.',
-  });
-  // Wait briefly for the document to be ready.
-  await sleep(50);
+  if (!(await hasOffscreen())) {
+    await chrome.offscreen.createDocument({
+      url: OFFSCREEN_PATH,
+      reasons: ['BLOBS', 'USER_MEDIA'],
+      justification: 'Build PDF with jsPDF and stitch full-page screenshots.',
+    });
+  }
+  for (let i = 0; i < 40; i++) {
+    try {
+      const pong = await sendToOffscreen({ type: 'PING_OFFSCREEN' });
+      if (pong && pong.ok) return;
+    } catch { /* not ready */ }
+    await sleep(100);
+  }
+  throw new Error('Offscreen document did not become ready.');
 }
 
 async function closeOffscreen() {
@@ -229,12 +548,13 @@ async function sendToOffscreen(msg) {
   return chrome.runtime.sendMessage({ ...msg, target: 'offscreen' });
 }
 
-async function buildPdfViaOffscreen(screenshots, settings) {
+async function buildPdfViaOffscreen(screenshots, settings, session) {
   await ensureOffscreen();
   const response = await sendToOffscreen({
     type: 'BUILD_PDF_OFFSCREEN',
     screenshots,
     settings,
+    session,
   });
   if (!response || !response.ok) {
     throw new Error((response && response.error) || 'PDF builder did not respond.');
@@ -244,64 +564,118 @@ async function buildPdfViaOffscreen(screenshots, settings) {
 
 // ---------- Capture pipeline ----------
 
+function captureGapMs(captureTarget) {
+  return captureTarget === 'screen' ? SCREEN_CAPTURE_GAP_MS : MIN_CAPTURE_GAP_MS;
+}
+
+async function signalCapturePending(captureTarget) {
+  await chrome.storage.local.set({ captureInProgress: Date.now() });
+  if (captureTarget === 'screen') {
+    await flashBadge('…', 1200, '#3b82f6');
+    try {
+      await chrome.action.setTitle({ title: 'ScreenClick — capturing…' });
+    } catch { /* ignore */ }
+    if (launcherPort) {
+      try {
+        launcherPort.postMessage({ type: 'CAPTURE_UI', phase: 'start' });
+      } catch { /* disconnected */ }
+    }
+  }
+}
+
+async function clearCapturePending(ok, errMsg, captureTarget) {
+  await chrome.storage.local.remove('captureInProgress');
+  if (captureTarget === 'screen') {
+    try {
+      await chrome.action.setTitle({ title: 'ScreenClick' });
+    } catch { /* ignore */ }
+    if (launcherPort) {
+      try {
+        if (ok) {
+          launcherPort.postMessage({ type: 'CAPTURE_UI', phase: 'done' });
+        } else {
+          launcherPort.postMessage({ type: 'CAPTURE_UI', phase: 'err', error: errMsg });
+        }
+      } catch { /* ignore */ }
+    }
+    if (ok) await flashBadge('✓', 700, '#16a34a');
+  }
+}
+
 function captureNow(meta = {}) {
-  captureChain = captureChain.then(() => doCapture(meta)).catch((e) => {
-    console.warn('[QA Tool] capture chain error:', e);
-  });
+  captureChain = captureChain
+    .then(() => doCapture(meta))
+    .catch((e) => {
+      console.warn('[QA Tool] capture chain error:', e);
+    });
   return captureChain;
 }
 
 async function doCapture(meta) {
+  await clearStaleCapturePending();
   const state = await getState();
   if (!state.isRecording) return;
 
-  // Respect inter-capture rate-limit gap.
-  const wait = MIN_CAPTURE_GAP_MS - (Date.now() - lastCaptureAt);
-  if (wait > 0) await sleep(wait);
+  const captureTarget = state.captureTarget;
+  const isScreen = captureTarget === 'screen';
+  let ok = false;
+  let errMsg = null;
 
-  let dataUrl = null;
+  await signalCapturePending(captureTarget);
   try {
-    if (state.captureTarget === 'visible' || state.captureTarget === 'process') {
+    const gap = captureGapMs(captureTarget) - (Date.now() - lastCaptureAt);
+    if (gap > 0) await sleep(gap);
+
+    let dataUrl = null;
+    if (captureTarget === 'visible' || captureTarget === 'process') {
       dataUrl = await captureVisibleTab(state);
-    } else if (state.captureTarget === 'fullpage') {
+    } else if (captureTarget === 'fullpage') {
       dataUrl = await captureFullPage(state);
-    } else if (state.captureTarget === 'screen') {
+    } else if (isScreen) {
       dataUrl = await captureScreen(state);
     }
+
+    if (!dataUrl) {
+      errMsg = 'Capture produced no image.';
+      return;
+    }
+    lastCaptureAt = Date.now();
+
+    let pageUrl = meta.pageUrl;
+    if (!pageUrl && state.activeTabId) {
+      try {
+        const t = await chrome.tabs.get(state.activeTabId);
+        pageUrl = t && t.url;
+      } catch { /* tab may be gone */ }
+    }
+
+    const fresh = await chrome.storage.local.get('screenshots');
+    const list = fresh.screenshots || [];
+    const capturedAt = Date.now();
+    const record = {
+      id: makeStepId(),
+      dataUrl,
+      timestamp: capturedAt,
+      timestampUtc: new Date(capturedAt).toISOString(),
+      source: meta.source || 'manual',
+    };
+    if (pageUrl) record.pageUrl = pageUrl;
+    if (meta.stepNumber) record.stepNumber = meta.stepNumber;
+    if (meta.actionLabel) record.actionLabel = meta.actionLabel;
+    if (meta.elementInfo) record.elementInfo = meta.elementInfo;
+    list.push(record);
+    await setState({ screenshots: list, lastCaptureError: null });
+    await chrome.storage.local.set({ lastCaptureSuccessAt: Date.now() });
+    await updateBadge();
+    ok = true;
   } catch (e) {
-    console.warn('[QA Tool] capture failed:', e?.message || e);
-    return;
+    errMsg = e?.message || String(e);
+    console.warn('[QA Tool] capture failed:', errMsg);
+    await chrome.storage.local.set({ lastCaptureError: errMsg });
+    if (isScreen) await flashBadge('ERR', 1500);
+  } finally {
+    await clearCapturePending(ok, errMsg, captureTarget);
   }
-
-  if (!dataUrl) return;
-  lastCaptureAt = Date.now();
-
-  // Resolve the page URL: content script supplies it when capture is
-  // triggered there. For SW-initiated paths (e.g. timer fallback in screen
-  // mode), look up the active tab's URL.
-  let pageUrl = meta.pageUrl;
-  if (!pageUrl && state.activeTabId) {
-    try {
-      const t = await chrome.tabs.get(state.activeTabId);
-      pageUrl = t && t.url;
-    } catch { /* tab may be gone */ }
-  }
-
-  const fresh = await chrome.storage.local.get('screenshots');
-  const list = fresh.screenshots || [];
-  const record = {
-    dataUrl,
-    timestamp: Date.now(),
-    source: meta.source || 'manual',
-  };
-  if (pageUrl) record.pageUrl = pageUrl;
-  // Carry process-record metadata if present.
-  if (meta.stepNumber) record.stepNumber = meta.stepNumber;
-  if (meta.actionLabel) record.actionLabel = meta.actionLabel;
-  if (meta.elementInfo) record.elementInfo = meta.elementInfo;
-  list.push(record);
-  await setState({ screenshots: list });
-  await updateBadge();
 }
 
 async function captureVisibleTab(state) {
@@ -382,15 +756,21 @@ async function captureFullPage(state) {
 }
 
 async function captureScreen(state) {
-  await ensureOffscreen();
-  const res = await sendToOffscreen({
+  const msg = {
     type: 'CAPTURE_SCREEN_FRAME',
     quality: state.settings.imageQuality || 0.8,
-  });
-  if (!res || !res.ok) {
-    throw new Error('Screen frame capture failed: ' + (res && res.error));
+  };
+  let lastErr = 'Screen frame capture failed.';
+  for (let attempt = 0; attempt < 2; attempt++) {
+    if (attempt > 0) await sleep(150);
+    const res = await sendToLauncher(msg);
+    if (res && res.ok && res.dataUrl) return res.dataUrl;
+    lastErr = (res && res.error) || lastErr;
+    if (res && res.error && /helper window is closed|sharing ended|not a camera/i.test(res.error)) {
+      break;
+    }
   }
-  return res.dataUrl;
+  throw new Error(lastErr);
 }
 
 function sleep(ms) { return new Promise((r) => setTimeout(r, ms)); }
@@ -407,8 +787,9 @@ function stopTimer() {
 }
 
 async function triggerTimerCapture() {
-  const { activeTabId: tabId, isRecording, captureTarget } = await getState();
+  const { activeTabId: tabId, isRecording, captureTarget, settings } = await getState();
   if (!isRecording) return;
+  if (!wantsTimerForTarget(settings, captureTarget)) return;
   // visible-tab and process modes: route through content script so the
   // green ring and (for process) the step label are produced there.
   if ((captureTarget === 'visible' || captureTarget === 'process') && tabId) {
@@ -423,18 +804,18 @@ async function triggerTimerCapture() {
 }
 
 async function restoreOnWake() {
+  await clearStaleCapturePending();
   const { isRecording, settings, captureTarget } = await getState();
-  const wantsTimer = captureTarget === 'process'
-    ? !!(settings.processTriggers && settings.processTriggers.timer)
-    : !!settings.triggers.timer;
-  if (isRecording && wantsTimer) startTimer(settings.timerInterval);
+  if (isRecording && wantsTimerForTarget(settings, captureTarget)) {
+    startTimer(getTimerIntervalMs(settings, captureTarget));
+  }
   await updateBadge();
 }
 
 // ---------- Messages ----------
 
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
-  if (msg && msg.target === 'offscreen') return false;
+  if (msg && (msg.target === 'offscreen' || msg.target === 'launcher')) return false;
 
   if (msg && msg.type === 'OFFSCREEN_READY') {
     sendResponse({ ok: true });
@@ -451,15 +832,56 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           sendResponse({ ok: true });
         }
       } else if (msg.type === 'SCREEN_PICKER_RESULT') {
-        await startRecording('screen', msg.streamId);
-        sendResponse({ ok: true });
+        try {
+          await startRecording('screen', null, { launcherStreamReady: true });
+          sendResponse({ ok: true });
+        } catch (e) {
+          await stopScreenCaptureSession();
+          await clearScreenPickerContext();
+          sendResponse({ ok: false, error: e?.message || String(e) });
+        }
       } else if (msg.type === 'SCREEN_PICKER_CANCELLED') {
+        await stopScreenCaptureSession();
+        await clearScreenPickerContext();
+        sendResponse({ ok: true });
+      } else if (msg.type === 'SCREEN_STREAM_ENDED') {
+        const { isRecording, captureTarget } = await getState();
+        if (isRecording && captureTarget === 'screen') {
+          await chrome.storage.local.set({
+            lastCaptureError: 'Screen sharing stopped. Start Screen or Window mode again.',
+          });
+          await stopScreenCaptureSession();
+          await setState({ isRecording: false });
+          stopTimer();
+          await updateBadge();
+        }
         sendResponse({ ok: true });
       } else if (msg.type === 'STOP_AND_SAVE') {
         const result = await stopAndSave(msg.filename);
         sendResponse(result);
       } else if (msg.type === 'DISCARD_SESSION') {
         await discardSession();
+        sendResponse({ ok: true });
+      } else if (msg.type === 'UPDATE_STEP') {
+        await updateStepLabel(msg.id, msg.actionLabel);
+        sendResponse({ ok: true });
+      } else if (msg.type === 'DELETE_STEP') {
+        await deleteStep(msg.id);
+        sendResponse({ ok: true });
+      } else if (msg.type === 'MOVE_STEP') {
+        await moveStep(msg.id, msg.direction);
+        sendResponse({ ok: true });
+      } else if (msg.type === 'OPEN_STEPS_PANEL') {
+        await ensureStepIds();
+        const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+        const t = tabs[0];
+        await openStepsPanel(t && t.windowId, t && t.id);
+        sendResponse({ ok: true });
+      } else if (msg.type === 'MIGRATE_STEP_IDS') {
+        await ensureStepIds();
+        sendResponse({ ok: true });
+      } else if (msg.type === 'KEYBOARD_CAPTURE_SHORTCUT') {
+        await handleCaptureCommand();
         sendResponse({ ok: true });
       } else if (msg.type === 'CAPTURE_NOW') {
         await captureNow({
@@ -471,13 +893,13 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         });
         sendResponse({ ok: true });
       } else if (msg.type === 'SETTINGS_CHANGED') {
-        const { isRecording, settings, captureTarget } = await getState();
+        const { isRecording, settings, captureTarget, activeTabId } = await getState();
         if (isRecording) {
-          const wantsTimer = captureTarget === 'process'
-            ? !!(settings.processTriggers && settings.processTriggers.timer)
-            : !!settings.triggers.timer;
-          if (wantsTimer) startTimer(settings.timerInterval);
+          if (wantsTimerForTarget(settings, captureTarget)) {
+            startTimer(getTimerIntervalMs(settings, captureTarget));
+          }
           else stopTimer();
+          if (activeTabId) await pushRecordingStateToTab(activeTabId);
         }
         sendResponse({ ok: true });
       } else {
@@ -497,9 +919,7 @@ chrome.commands.onCommand.addListener(async (command) => {
   try {
     if (command === 'capture-screenshot') {
       await handleCaptureCommand();
-    } else if (command === 'stop-and-save') {
-      await handleStopAndSaveCommand();
-    } else if (command === 'toggle-recording') {
+    } else if (command === 'stop-and-save' || command === 'toggle-recording') {
       await handleToggleCommand();
     }
   } catch (e) {
@@ -508,8 +928,37 @@ chrome.commands.onCommand.addListener(async (command) => {
 });
 
 async function handleCaptureCommand() {
-  const { isRecording, activeTabId: tabId, captureTarget } = await getState();
+  const now = Date.now();
+  if (now - lastKeyboardCaptureAt < KEYBOARD_CAPTURE_DEBOUNCE_MS) return;
+  lastKeyboardCaptureAt = now;
+
+  await clearStaleCapturePending();
+  const { isRecording, activeTabId: tabId, captureTarget, settings } = await getState();
   if (!isRecording) return;
+
+  if (captureTarget === 'screen') {
+    const st = settings.screenTriggers || settings.triggers || {};
+    if (st.keyboard === false) return;
+    if (!(await isLauncherWindowOpen())) {
+      await chrome.storage.local.set({
+        lastCaptureError: 'Screen helper window is closed. Keep it open (minimize is OK) while capturing.',
+      });
+      await flashBadge('!', 2000);
+      return;
+    }
+    const portReady = await waitForLauncherPort();
+    if (!portReady) {
+      await chrome.storage.local.set({
+        lastCaptureError: 'Screen helper is still connecting. Wait a moment and try again.',
+      });
+      await flashBadge('!', 2000);
+      return;
+    }
+    await flashBadge('…', 500, '#3b82f6');
+    captureNow({ source: 'keyboard' });
+    return;
+  }
+
   if ((captureTarget === 'visible' || captureTarget === 'process') && tabId) {
     try {
       await chrome.tabs.sendMessage(tabId, { type: 'KEYBOARD_TRIGGER' });
@@ -559,11 +1008,11 @@ async function handleToggleCommand() {
 }
 
 // Briefly show a temporary badge text, then restore the recording/idle badge.
-async function flashBadge(text) {
+async function flashBadge(text, holdMs = 1500, bgColor = '#f59e0b') {
   try {
-    await chrome.action.setBadgeBackgroundColor({ color: '#f59e0b' });
+    await chrome.action.setBadgeBackgroundColor({ color: bgColor });
     await chrome.action.setBadgeText({ text });
-    setTimeout(() => updateBadge().catch(() => {}), 1500);
+    setTimeout(() => updateBadge().catch(() => {}), holdMs);
   } catch {}
 }
 
@@ -574,6 +1023,19 @@ chrome.runtime.onInstalled.addListener(async () => {
   if (!data.settings) {
     await chrome.storage.local.set({ settings: DEFAULT_SETTINGS });
   }
+  if (chrome.sidePanel) {
+    try {
+      await ensureSidePanelEnabled();
+      if (chrome.sidePanel.setPanelBehavior) {
+        await chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: false });
+      }
+    } catch { /* older Chrome */ }
+  }
+});
+
+chrome.tabs.onActivated.addListener(async ({ tabId }) => {
+  const { isRecording } = await getState();
+  if (isRecording) await pushRecordingStateToTab(tabId);
 });
 
 chrome.runtime.onStartup.addListener(restoreOnWake);

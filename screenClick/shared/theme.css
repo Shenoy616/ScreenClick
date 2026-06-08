@@ -1,0 +1,104 @@
+/* ScreenClick design tokens — aligned with landing-page/style.css */
+
+:root {
+  --bg: #faf9f5;
+  --surface: #f3f1ea;
+  --surface-elevated: #ffffff;
+  --surface-dark: #141413;
+  --ink: #141413;
+  --ink-mid: #5a5a55;
+  --ink-soft: #b0aea5;
+  --border: #e8e6dc;
+  --border-strong: #c9c7bb;
+  --accent: #d97757;
+  --accent-dark: #b85a3f;
+  --accent-soft: rgba(217, 119, 87, 0.10);
+  --accent-glow: rgba(217, 119, 87, 0.18);
+  --advantage: #15803d;
+  --advantage-dark: #14532d;
+  --advantage-soft: rgba(22, 163, 74, 0.14);
+  --advantage-border: rgba(22, 163, 74, 0.35);
+  --danger: #b91c1c;
+  --danger-dim: #991b1b;
+  --danger-soft: rgba(185, 28, 28, 0.10);
+
+  /* Semantic aliases used across extension UI */
+  --text: var(--ink);
+  --text-dim: var(--ink-mid);
+  --card: var(--surface-elevated);
+  --surface-2: var(--surface);
+
+  --green: var(--advantage);
+  --green-dim: var(--advantage-dark);
+  --green-soft: var(--advantage-soft);
+  --red: var(--danger);
+  --red-dim: var(--danger-dim);
+  --red-soft: var(--danger-soft);
+  --amber: var(--accent);
+
+  --radius-sm: 10px;
+  --radius-md: 12px;
+  --radius-pill: 999px;
+  --shadow-sm: 0 1px 2px rgba(20, 20, 19, 0.04);
+  --shadow-md: 0 8px 32px rgba(20, 20, 19, 0.06);
+  --ease-out: cubic-bezier(0.22, 0.68, 0.2, 1);
+
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+
+  --badge-bg: var(--accent-soft);
+  --badge-text: var(--accent-dark);
+
+  /* Primary CTA — always ink-black, never accent on hover */
+  --btn-primary-bg: #141413;
+  --btn-primary-fg: #faf9f5;
+  --btn-primary-hover-bg: #2a2928;
+  --btn-primary-border: #141413;
+
+  /* Neutral card / picker hover — separate from accent actions */
+  --card-hover-bg: var(--surface);
+  --card-hover-border: var(--border-strong);
+
+  /* Mode picker — bold terracotta hover */
+  --picker-hover-bg: #edd0c4;
+  --picker-hover-border: #d97757;
+  --picker-hover-ring: rgba(217, 119, 87, 0.38);
+}
+
+html[data-theme="dark"] {
+  --bg: #141413;
+  --surface: #1c1b19;
+  --surface-elevated: #222120;
+  --ink: #faf9f5;
+  --ink-mid: #a8a69e;
+  --ink-soft: #6b6962;
+  --border: #2e2d2a;
+  --border-strong: #403e3a;
+  --accent: #e08a6f;
+  --accent-dark: #d97757;
+  --accent-soft: rgba(217, 119, 87, 0.16);
+  --accent-glow: rgba(217, 119, 87, 0.24);
+  --advantage: #22c55e;
+  --advantage-dark: #16a34a;
+  --advantage-soft: rgba(34, 197, 94, 0.14);
+  --advantage-border: rgba(34, 197, 94, 0.35);
+  --danger: #ef4444;
+  --danger-dim: #dc2626;
+  --danger-soft: rgba(239, 68, 68, 0.14);
+
+  --card: var(--surface-elevated);
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.28);
+  --shadow-md: 0 8px 32px rgba(0, 0, 0, 0.38);
+
+  --btn-primary-bg: #141413;
+  --btn-primary-fg: #faf9f5;
+  --btn-primary-hover-bg: #2e2d2a;
+  --btn-primary-border: #403e3a;
+
+  --card-hover-bg: #2a2928;
+  --card-hover-border: #403e3a;
+
+  --picker-hover-bg: rgba(217, 119, 87, 0.32);
+  --picker-hover-border: #e08a6f;
+  --picker-hover-ring: rgba(224, 138, 111, 0.45);
+}

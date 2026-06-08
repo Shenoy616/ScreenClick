@@ -4,12 +4,13 @@
   <meta charset="UTF-8">
   <title>ScreenClick - Settings</title>
   <link rel="stylesheet" href="options.css">
+  <script src="../shared/theme.js"></script>
 </head>
 <body>
   <div class="wrap">
     <header>
       <h1>
-        <img src="../icons/icon-48.png" alt="" class="header-icon">
+        <img src="../icons/icon-48.png" alt="" class="header-icon brand-icon">
         ScreenClick
       </h1>
       <p class="subtitle">Settings</p>
@@ -17,13 +18,13 @@
 
     <section class="card">
       <h2>Standard Triggers</h2>
-      <p class="hint">Apply to Visible Tab, Full Page, and Entire Screen modes.</p>
+      <p class="hint">Apply to <strong>Visible Tab</strong> mode.</p>
 
       <label class="row">
-        <input type="checkbox" id="trigger-doubleclick">
+        <input type="checkbox" id="trigger-click">
         <div>
-          <div class="row-title">Double-click</div>
-          <div class="row-desc">Capture when the user double-clicks anywhere on the page. Visible Tab mode only.</div>
+          <div class="row-title">Click</div>
+          <div class="row-desc">Capture when the user single-clicks anywhere on the page.</div>
         </div>
       </label>
 
@@ -50,8 +51,34 @@
     </section>
 
     <section class="card">
+      <h2>Screen or Window mode</h2>
+      <p class="hint">Desktop screenshots of your monitor or an app window.</p>
+
+      <label class="row">
+        <input type="checkbox" id="screen-keyboard">
+        <div>
+          <div class="row-title">Keyboard shortcut</div>
+          <div class="row-desc">Press Shift+Command+2 (Mac) or Shift+Ctrl+2 (Windows) for each screenshot.</div>
+        </div>
+      </label>
+
+      <label class="row">
+        <input type="checkbox" id="screen-timer">
+        <div>
+          <div class="row-title">Timer</div>
+          <div class="row-desc">Capture automatically at the interval below while recording.</div>
+        </div>
+      </label>
+
+      <div class="row sub-row" id="screen-timer-config">
+        <label for="screen-timer-interval">Interval (seconds)</label>
+        <input type="number" id="screen-timer-interval" min="2" max="600" step="1" value="10">
+      </div>
+    </section>
+
+    <section class="card">
       <h2>Process Record Mode</h2>
-      <p class="hint">Triggers that fire while in Process Record mode. Each capture becomes a labeled step in the PDF.</p>
+      <p class="hint">Triggers that fire while in Process Record mode. Each capture becomes a numbered Point in the PDF.</p>
 
       <label class="row">
         <input type="checkbox" id="proc-click">
@@ -65,7 +92,7 @@
         <input type="checkbox" id="proc-only-interactive">
         <div>
           <div class="row-title">Only interactive elements</div>
-          <div class="row-desc">Ignore clicks on plain text or backgrounds. Capture only buttons, links, inputs, and elements with click handlers.</div>
+          <div class="row-desc">Prefer buttons, links, and controls for Point names. Other clicks still save a screenshot (you can add a Point manually in the side panel).</div>
         </div>
       </label>
 
@@ -89,7 +116,7 @@
         <input type="checkbox" id="proc-timer">
         <div>
           <div class="row-title">Timer</div>
-          <div class="row-desc">Periodic capture, useful for long-running processes.</div>
+          <div class="row-desc">Periodic capture, useful for long-running processes (uses Standard Triggers interval).</div>
         </div>
       </label>
     </section>
@@ -105,22 +132,18 @@
 
     <section class="card">
       <h2>Keyboard Shortcuts</h2>
-      <p class="hint">Three shortcuts are available. To rebind any of them, open <a href="#" id="open-shortcuts">chrome://extensions/shortcuts</a> (Chrome does not let extensions set keys directly).</p>
+      <p class="hint">Two shortcuts are available. To rebind them, open <a href="#" id="open-shortcuts">chrome://extensions/shortcuts</a> (Chrome does not let extensions set keys directly).</p>
       <div class="shortcuts-list">
         <div class="shortcut-row">
-          <code class="shortcut-key shortcut-chip" data-key="S"></code>
-          <span class="shortcut-desc">Capture screenshot (during recording only)</span>
-        </div>
-        <div class="shortcut-row">
           <code class="shortcut-key shortcut-chip" data-key="1"></code>
-          <span class="shortcut-desc">Toggle: start recording, or stop and save PDF</span>
+          <span class="shortcut-desc">Start capturing or stop and save PDF</span>
         </div>
         <div class="shortcut-row">
           <code class="shortcut-key shortcut-chip" data-key="2"></code>
-          <span class="shortcut-desc">Stop recording and save PDF immediately</span>
+          <span class="shortcut-desc">Capture screenshot (during recording only)</span>
         </div>
       </div>
-      <p class="hint" style="margin-top:10px;">Toggle-start defaults to Visible Tab mode; use the popup to start in Process, Full Page, or Entire Screen mode.</p>
+      <p class="hint" style="margin-top:10px;">Toggle-start defaults to Visible Tab mode; use the popup to start in Process Record or Screen or Window mode.</p>
     </section>
 
     <div class="footer-bar">
