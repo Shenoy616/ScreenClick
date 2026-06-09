@@ -32,7 +32,9 @@ The archive includes a top-level `screenClick/` folder so users can unzip and lo
 
 ## Landing page
 
-Open `landing-page/index.html` locally or deploy the `landing-page/` folder to any static host. Keep `screenclick.zip` in that folder in sync with the extension when you release.
+**Live site:** https://shenoy616.github.io/ScreenClick/
+
+Open `landing-page/index.html` locally or push to `main` to redeploy via GitHub Pages (`.github/workflows/pages.yml`). Keep `screenclick.zip` in that folder in sync with the extension when you release.
 
 ## Privacy
 
