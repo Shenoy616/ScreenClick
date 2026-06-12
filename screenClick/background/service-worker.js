@@ -1175,13 +1175,6 @@ async function warnIfShortcutsUnassigned() {
   } catch { /* ignore */ }
 }
 
-chrome.action.onClicked.addListener((tab) => {
-  openSidePanelNow(tab?.windowId, tab?.id);
-  ensureSidePanelEnabled(tab?.id, tab?.windowId).catch((e) => {
-    console.warn('[ScreenClick] toolbar click:', e?.message || e);
-  });
-});
-
 chrome.runtime.onInstalled.addListener(async () => {
   const data = await chrome.storage.local.get('settings');
   if (!data.settings) {
