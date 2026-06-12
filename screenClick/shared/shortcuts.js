@@ -1,4 +1,4 @@
-// Shared shortcuts: Cmd+Shift+1 / Ctrl+Shift+1 (toggle) and +2 (capture).
+// Activation shortcut only: Cmd+Shift+1 / Ctrl+Shift+1 (start or stop capturing).
 (function (root) {
   const IS_MAC = (() => {
     const data = navigator.userAgentData;
@@ -6,21 +6,9 @@
     return /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent || '');
   })();
 
-  const SHIFTED_DIGIT_KEYS = {
-    1: '!',
-    2: '@',
-    3: '#',
-    4: '$',
-    5: '%',
-    6: '^',
-    7: '&',
-    8: '*',
-    9: '(',
-    0: ')',
-  };
+  const SHIFTED_DIGIT_KEYS = { 1: '!' };
 
   function hasShortcutModifier(e) {
-    // Mac: Command+Shift (manifest default). Windows: Ctrl+Shift. Accept both modifiers on Mac.
     if (IS_MAC) return e.metaKey || e.ctrlKey;
     return e.ctrlKey;
   }
@@ -37,10 +25,6 @@
     );
   }
 
-  function isCaptureShortcutKey(e) {
-    return isModShiftDigit(e, '2');
-  }
-
   function isToggleShortcutKey(e) {
     return isModShiftDigit(e, '1');
   }
@@ -53,78 +37,29 @@
     return !!el.closest?.('[contenteditable="true"]');
   }
 
-  function requestKeyboardCapture() {
-    try {
-      chrome.runtime.sendMessage({ type: 'KEYBOARD_CAPTURE_SHORTCUT' });
-    } catch { /* ignore */ }
-  }
-
   function requestToggleRecording() {
     try {
       chrome.runtime.sendMessage({ type: 'TOGGLE_RECORDING_SHORTCUT' });
     } catch { /* ignore */ }
   }
 
-  // Page-level fallback when chrome.commands shortcuts are not bound (common for unpacked extensions).
-  function bindPageShortcuts({
-    allowToggle = () => true,
-    allowCapture = () => false,
-  } = {}) {
+  // Page-level fallback when chrome.commands is not bound (common for unpacked extensions).
+  function bindActivationShortcut({ allowToggle = () => true } = {}) {
     document.addEventListener('keydown', (e) => {
       if (isEditableTarget(e.target)) return;
-
-      if (isToggleShortcutKey(e)) {
-        if (!allowToggle()) return;
-        e.preventDefault();
-        e.stopPropagation();
-        requestToggleRecording();
-        return;
-      }
-
-      if (!allowCapture() || !isCaptureShortcutKey(e)) return;
+      if (!isToggleShortcutKey(e)) return;
+      if (!allowToggle()) return;
       e.preventDefault();
       e.stopPropagation();
-      requestKeyboardCapture();
+      requestToggleRecording();
     }, true);
   }
 
-  function shortcutLabel(digit) {
-    return IS_MAC ? `Cmd+Shift+${digit}` : `Ctrl+Shift+${digit}`;
-  }
-
-  function shortcutChip(digit) {
-    return shortcutLabel(digit);
-  }
-
-  function applyShortcutLabels(root = document) {
-    root.querySelectorAll('.shortcut-chip, .shortcut-inline').forEach((el) => {
-      const key = el.getAttribute('data-key');
-      if (!key) return;
-      el.textContent = shortcutChip(key);
-    });
-  }
-
-  function keyboardCaptureAllowed(session) {
-    if (!session?.isRecording) return false;
-    const settings = session.settings || {};
-    const target = session.captureTarget || 'visible';
-    if (target === 'screen') return (settings.screenTriggers || {}).keyboard !== false;
-    if (target === 'process') return (settings.processTriggers || {}).keyboard !== false;
-    return (settings.triggers || {}).keyboard !== false;
-  }
-
   root.ScreenClickShortcuts = {
-    isCaptureShortcutKey,
     isToggleShortcutKey,
     isEditableTarget,
-    requestKeyboardCapture,
     requestToggleRecording,
-    bindPageShortcuts,
-    shortcutLabel,
-    shortcutChip,
-    applyShortcutLabels,
-    keyboardCaptureAllowed,
-    modKeyLabel: IS_MAC ? 'Command' : 'Control',
+    bindActivationShortcut,
     isMac: IS_MAC,
   };
 })(typeof globalThis !== 'undefined' ? globalThis : window);

@@ -1,11 +1,5 @@
 // Launcher: chrome.desktopCapture picker + frame grabs for Screen or Window mode.
 
-globalThis.ScreenClickShortcuts?.applyShortcutLabels?.();
-
-function captureShortcutText() {
-  return globalThis.ScreenClickShortcuts?.shortcutChip('2') || 'Ctrl+Shift+2';
-}
-
 const statusEl = document.getElementById('status');
 
 let launcherPort = null;
@@ -223,7 +217,7 @@ function notifySessionStarted() {
     }
     if (response && response.ok) {
       setLauncherReady();
-      setStatus(`Ready — ${captureShortcutText()} or Capture in the side panel. Keep this window open.`);
+      setStatus('Ready — use Capture in the side panel. Keep this window open.');
       if (launcherPort) {
         try {
           launcherPort.postMessage({ type: 'LAUNCHER_STREAM_READY' });
@@ -408,7 +402,7 @@ function onLauncherPortMessage(msg) {
     if (msg.phase === 'start') setStatus('Capturing…');
     else if (msg.phase === 'done') {
       setLauncherReady();
-      setStatus(`Saved — ${captureShortcutText()} for next. Keep this window open.`);
+      setStatus('Saved — use Capture in the side panel for the next shot. Keep this window open.');
     } else if (msg.phase === 'err') {
       setStatus(msg.error || 'Capture failed', true);
     }
@@ -436,11 +430,6 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
     }
   })();
   return true;
-});
-
-globalThis.ScreenClickShortcuts?.bindPageShortcuts({
-  allowToggle: () => true,
-  allowCapture: () => streamReady,
 });
 
 openDesktopCapturePicker();

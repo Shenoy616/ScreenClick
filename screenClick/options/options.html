@@ -32,22 +32,6 @@
     </header>
 
     <section class="card">
-      <h2>Keyboard Shortcuts</h2>
-      <p class="hint">Two shortcuts are available. To rebind them, open <a href="#" id="open-shortcuts">chrome://extensions/shortcuts</a> (Chrome does not let extensions set keys directly).</p>
-      <div class="shortcuts-list">
-        <div class="shortcut-row">
-          <code class="shortcut-key shortcut-chip" data-key="1"></code>
-          <span class="shortcut-desc">Start capturing or stop and save PDF</span>
-        </div>
-        <div class="shortcut-row">
-          <code class="shortcut-key shortcut-chip" data-key="2"></code>
-          <span class="shortcut-desc">Capture screenshot (during recording only)</span>
-        </div>
-      </div>
-      <p class="hint hint-last" id="shortcut-platform-hint"></p>
-    </section>
-
-    <section class="card">
       <h2>Standard Triggers</h2>
       <p class="hint">Apply to <strong>Visible Tab</strong> mode.</p>
 
@@ -56,14 +40,6 @@
         <div>
           <div class="row-title">Click</div>
           <div class="row-desc">Capture when the user single-clicks anywhere on the page. If all triggers are off, use <strong>Capture screenshot</strong> in the side panel.</div>
-        </div>
-      </label>
-
-      <label class="row">
-        <input type="checkbox" id="trigger-keyboard">
-        <div>
-          <div class="row-title">Keyboard Shortcut</div>
-          <div class="row-desc">Use the keyboard shortcut at the top of this page to capture during recording. Rebind at <code>chrome://extensions/shortcuts</code>.</div>
         </div>
       </label>
 
@@ -110,14 +86,6 @@
       </label>
 
       <label class="row">
-        <input type="checkbox" id="proc-keyboard">
-        <div>
-          <div class="row-title">Keyboard shortcut</div>
-          <div class="row-desc">Use the keyboard shortcut as a manual step trigger.</div>
-        </div>
-      </label>
-
-      <label class="row">
         <input type="checkbox" id="proc-timer">
         <div>
           <div class="row-title">Timer</div>
@@ -134,14 +102,6 @@
     <section class="card">
       <h2>Screen or Window mode</h2>
       <p class="hint">Desktop screenshots of your monitor or an app window.</p>
-
-      <label class="row">
-        <input type="checkbox" id="screen-keyboard">
-        <div>
-          <div class="row-title">Keyboard shortcut</div>
-          <div class="row-desc">Press <span class="shortcut-inline" data-key="2"></span> for each screenshot.</div>
-        </div>
-      </label>
 
       <label class="row">
         <input type="checkbox" id="screen-timer">
@@ -167,7 +127,6 @@
     </section>
   </div>
 
-  <script src="../shared/shortcuts.js"></script>
   <script src="options.js"></script>
 </body>
 </html>

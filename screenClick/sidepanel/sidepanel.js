@@ -2,7 +2,6 @@
 
 globalThis.ScreenClickTheme?.applyStoredTheme();
 globalThis.ScreenClickTheme?.bindThemeToggle(document.getElementById('theme-toggle'));
-globalThis.ScreenClickShortcuts?.applyShortcutLabels?.();
 globalThis.ScreenClickTheme?.listenThemeChanges();
 
 const TARGET_LABELS = {
@@ -49,9 +48,9 @@ let pickerOpen = false;
 let startInProgress = false;
 
 const DEFAULT_SETTINGS = {
-  triggers: { click: true, keyboard: true, timer: false },
-  screenTriggers: { keyboard: true, timer: false },
-  processTriggers: { click: true, inputChange: true, keyboard: true, timer: false },
+  triggers: { click: true, keyboard: false, timer: false },
+  screenTriggers: { keyboard: false, timer: false },
+  processTriggers: { click: true, inputChange: true, keyboard: false, timer: false },
 };
 
 let screenshots = [];
@@ -161,12 +160,8 @@ function shouldShowEmptyState() {
   return !session.isRecording && !screenshots.length && !pickerOpen;
 }
 
-function captureShortcutChip() {
-  return globalThis.ScreenClickShortcuts?.shortcutChip('2') || 'Ctrl+Shift+2';
-}
-
 function captureTooltipText() {
-  return `Capture screenshot (${captureShortcutChip()})`;
+  return 'Capture screenshot';
 }
 
 let manualCaptureInFlight = false;
@@ -194,7 +189,7 @@ function panelHintText() {
     return 'Click a Point to edit · Enter to save · Esc to cancel';
   }
   if (session.captureTarget === 'screen') {
-    return `${captureShortcutChip()} to capture · reorder or remove before export`;
+    return 'Use the capture button for each shot · reorder or remove before export';
   }
   return 'Reorder or remove screenshots before export';
 }
@@ -418,30 +413,8 @@ function rebuildStepList() {
   }
 }
 
-function hasAutoCaptureTriggers() {
-  const s = session.settings || DEFAULT_SETTINGS;
-  const target = session.captureTarget;
-  if (target === 'visible') {
-    const t = s.triggers || {};
-    return !!(t.click || t.keyboard || t.timer);
-  }
-  if (target === 'screen') {
-    const st = s.screenTriggers || {};
-    return !!(st.keyboard || st.timer);
-  }
-  if (target === 'process') {
-    const p = s.processTriggers || {};
-    return !!(p.click || p.inputChange || p.keyboard || p.timer);
-  }
-  if (target === 'fullpage') {
-    const t = s.triggers || {};
-    return !!(t.keyboard || t.timer);
-  }
-  return true;
-}
-
-function showManualCaptureButton() {
-  return session.isRecording && !hasAutoCaptureTriggers();
+function showCaptureButton() {
+  return session.isRecording;
 }
 
 async function loadSession() {
@@ -541,7 +514,7 @@ function updateFloatingDock() {
   document.body.classList.toggle('has-floating-dock', showDock && (recordingActions || idleActions));
   if (els.idleActions) els.idleActions.classList.toggle('hidden', !idleActions);
   els.actions.classList.toggle('hidden', !recordingActions);
-  const manualCapture = showManualCaptureButton();
+  const manualCapture = showCaptureButton();
   if (els.captureBtn) {
     els.captureBtn.classList.toggle('hidden', !manualCapture);
     els.captureBtn.disabled = !manualCapture || session.captureInProgress;
@@ -837,11 +810,6 @@ if (els.captureBtn) {
 if (els.headerCaptureBtn) {
   els.headerCaptureBtn.addEventListener('click', () => triggerManualCapture());
 }
-
-globalThis.ScreenClickShortcuts?.bindPageShortcuts({
-  allowToggle: () => true,
-  allowCapture: () => globalThis.ScreenClickShortcuts?.keyboardCaptureAllowed(session),
-});
 
 els.stopBtn.addEventListener('click', () => {
   if (!session.isRecording) return;

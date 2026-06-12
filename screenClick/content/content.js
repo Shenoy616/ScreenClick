@@ -16,8 +16,8 @@
     captureTarget: 'visible',
     triggers: { click: true, keyboard: false, timer: false },
     lastVisibleClickAt: 0,
-    processTriggers: { click: true, inputChange: true, keyboard: true, timer: false },
-    screenTriggers: { keyboard: true, timer: false },
+    processTriggers: { click: true, inputChange: true, keyboard: false, timer: false },
+    screenTriggers: { keyboard: false, timer: false },
     processOptions: { onlyInteractive: true, debounceMs: 250 },
     lastMouse: { x: window.innerWidth / 2, y: window.innerHeight / 2 },
     indicator: null,
@@ -42,13 +42,13 @@
     const raw = s.triggers || {};
     STATE.triggers = {
       click: raw.click ?? raw.doubleClick ?? true,
-      keyboard: raw.keyboard !== false,
+      keyboard: false,
       timer: !!raw.timer,
     };
     STATE.processTriggers = {
       click: s.processTriggers?.click !== false,
       inputChange: s.processTriggers?.inputChange !== false,
-      keyboard: s.processTriggers?.keyboard !== false,
+      keyboard: false,
       timer: !!s.processTriggers?.timer,
     };
     STATE.processOptions = {
@@ -56,7 +56,7 @@
       debounceMs: s.processOptions?.debounceMs || 250,
     };
     STATE.screenTriggers = {
-      keyboard: s.screenTriggers?.keyboard !== false,
+      keyboard: false,
       timer: !!s.screenTriggers?.timer,
     };
     if (STATE.isRecording && !wasRecording) {
@@ -144,8 +144,8 @@
 
   async function triggerCapture(x, y, source, extra = {}) {
     if (!STATE.isRecording || STATE.exportPending) return;
-    const skipRing = source === 'timer' || source === 'process-timer';
-    if ((STATE.captureTarget === 'visible' || STATE.captureTarget === 'process') && !skipRing) {
+    const showRing = source === 'click' || source === 'process-click' || source === 'process-input';
+    if ((STATE.captureTarget === 'visible' || STATE.captureTarget === 'process') && showRing) {
       await drawRing(x, y);
     }
     try {
@@ -245,7 +245,7 @@
     }
   }
 
-  // Resolve button/link Point labels at a screen position (click, keyboard, manual, timer).
+  // Resolve button/link Point labels for click-triggered process steps only.
   function buildProcessPointPayload(x, y, { withActionLabel = true } = {}) {
     const start = elementAtClientPoint(x, y);
     if (!start) return {};
@@ -391,47 +391,10 @@
     captureInputFill(el, 'blur');
   }, true);
 
-  // Page-level shortcut listeners — chrome.commands can miss keystrokes when a tab has focus.
-  document.addEventListener('keydown', (e) => {
-    if (window !== window.top) return;
-    const sc = globalThis.ScreenClickShortcuts;
-    if (!sc) return;
-    if (sc.isEditableTarget(e.target)) return;
-
-    if (sc.isToggleShortcutKey(e)) {
-      e.preventDefault();
-      e.stopPropagation();
-      sc.requestToggleRecording();
-      return;
-    }
-
-    if (!STATE.isRecording || STATE.exportPending) return;
-
-    if (!sc.isCaptureShortcutKey(e)) return;
-
-    if (STATE.captureTarget === 'screen') {
-      if (!STATE.screenTriggers.keyboard) return;
-      e.preventDefault();
-      e.stopPropagation();
-      sc.requestKeyboardCapture();
-      return;
-    }
-
-    if (STATE.captureTarget === 'visible') {
-      if (!STATE.triggers.keyboard) return;
-      e.preventDefault();
-      e.stopPropagation();
-      sc.requestKeyboardCapture();
-      return;
-    }
-
-    if (STATE.captureTarget === 'process') {
-      if (!STATE.processTriggers.keyboard) return;
-      e.preventDefault();
-      e.stopPropagation();
-      sc.requestKeyboardCapture();
-    }
-  }, true);
+  // Activation shortcut fallback — chrome.commands can miss keystrokes when a tab has focus.
+  if (window === window.top) {
+    globalThis.ScreenClickShortcuts?.bindActivationShortcut?.({ allowToggle: () => true });
+  }
 
   document.addEventListener('keydown', (e) => {
     if (!STATE.isRecording || STATE.exportPending || STATE.captureTarget !== 'process') return;
@@ -735,24 +698,7 @@
 
   chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     try {
-      if (msg.type === 'KEYBOARD_TRIGGER') {
-        if (window !== window.top) {
-          sendResponse({ ok: true, skipped: 'subframe' });
-          return;
-        }
-        const wantsIt = STATE.captureTarget === 'process'
-          ? STATE.processTriggers.keyboard
-          : STATE.triggers.keyboard;
-        if (STATE.isRecording && !STATE.exportPending && wantsIt) {
-          if (STATE.captureTarget === 'process') {
-            const { x, y } = STATE.lastMouse;
-            triggerCapture(x, y, 'process-keyboard', buildProcessPointPayload(x, y));
-          } else {
-            triggerCapture(STATE.lastMouse.x, STATE.lastMouse.y, 'keyboard');
-          }
-        }
-        sendResponse({ ok: true });
-      } else if (msg.type === 'PRE_CAPTURE_RING') {
+      if (msg.type === 'PRE_CAPTURE_RING') {
         if (window !== window.top) {
           sendResponse({ ok: true, skipped: 'subframe' });
           return;
@@ -771,12 +717,7 @@
           return;
         }
         if (STATE.isRecording && !STATE.exportPending) {
-          if (STATE.captureTarget === 'process') {
-            const { x, y } = STATE.lastMouse;
-            triggerCapture(x, y, 'manual', buildProcessPointPayload(x, y));
-          } else {
-            triggerCapture(STATE.lastMouse.x, STATE.lastMouse.y, 'manual');
-          }
+          triggerCapture(STATE.lastMouse.x, STATE.lastMouse.y, 'manual');
         }
         sendResponse({ ok: true });
       } else if (msg.type === 'TIMER_TRIGGER') {
@@ -788,12 +729,8 @@
           ? STATE.processTriggers.timer
           : STATE.triggers.timer;
         if (STATE.isRecording && !STATE.exportPending && wantsIt) {
-          if (STATE.captureTarget === 'process') {
-            const { x, y } = STATE.lastMouse;
-            triggerCapture(x, y, 'process-timer', buildProcessPointPayload(x, y, { withActionLabel: false }));
-          } else {
-            triggerCapture(STATE.lastMouse.x, STATE.lastMouse.y, 'timer');
-          }
+          const source = STATE.captureTarget === 'process' ? 'process-timer' : 'timer';
+          triggerCapture(STATE.lastMouse.x, STATE.lastMouse.y, source);
         }
         sendResponse({ ok: true });
       } else if (msg.type === 'PING') {

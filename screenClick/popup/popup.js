@@ -3,10 +3,6 @@
 // Apply theme as early as possible to avoid flash of wrong theme on open.
 globalThis.ScreenClickTheme?.applyStoredTheme();
 
-const CAPTURE_SHORTCUT = globalThis.ScreenClickShortcuts?.shortcutLabel('2') || 'Ctrl+Shift+2';
-
-globalThis.ScreenClickShortcuts?.applyShortcutLabels?.();
-
 const els = {
   captureBtn: document.getElementById('capture-btn'),
   stopBtn: document.getElementById('stop-btn'),
@@ -27,9 +23,9 @@ const els = {
 };
 
 const DEFAULT_SETTINGS = {
-  triggers: { click: true, keyboard: true, timer: false },
-  screenTriggers: { keyboard: true, timer: false },
-  processTriggers: { click: true, inputChange: true, keyboard: true, timer: false },
+  triggers: { click: true, keyboard: false, timer: false },
+  screenTriggers: { keyboard: false, timer: false },
+  processTriggers: { click: true, inputChange: true, keyboard: false, timer: false },
   processOptions: { onlyInteractive: true, debounceMs: 250 },
   timerInterval: 10000,
   screenTimerInterval: 10000,
@@ -141,8 +137,8 @@ function renderTriggers(settings, target) {
     const items = [
       { label: 'Single click on interactive elements', on: p.click },
       { label: 'Form input fill (blur, idle, Enter)', on: p.inputChange },
-      { label: `Keyboard (${CAPTURE_SHORTCUT})`, on: p.keyboard },
       { label: `Timer (every ${Math.round((settings.processTimerInterval || settings.timerInterval) / 1000)}s)`, on: p.timer },
+      { label: 'Capture button', on: true },
     ];
     els.triggerList.innerHTML = items
       .map((i) => `<div class="trigger-item ${i.on ? '' : 'off'}">${i.label}</div>`)
@@ -153,9 +149,8 @@ function renderTriggers(settings, target) {
     const s = settings.screenTriggers || {};
     const sec = Math.round((settings.screenTimerInterval || settings.timerInterval) / 1000);
     const items = [
-      { label: `Keyboard (${CAPTURE_SHORTCUT})`, on: s.keyboard !== false },
       { label: `Timer (every ${sec}s)`, on: !!s.timer },
-      { label: 'Capture button (below)', on: true },
+      { label: 'Capture button', on: true },
     ];
     els.triggerList.innerHTML = items
       .map((i) => `<div class="trigger-item ${i.on ? '' : 'off'}">${i.label}</div>`)
@@ -166,8 +161,8 @@ function renderTriggers(settings, target) {
   const clickOn = (t.click ?? t.doubleClick ?? true) && target === 'visible';
   const items = [
     { label: target === 'visible' ? 'Click' : 'Click (visible tab only)', on: clickOn },
-    { label: `Keyboard (${CAPTURE_SHORTCUT})`, on: t.keyboard },
     { label: `Timer (every ${Math.round(settings.timerInterval / 1000)}s)`, on: t.timer },
+    { label: 'Capture button', on: true },
   ];
   els.triggerList.innerHTML = items
     .map((i) => `<div class="trigger-item ${i.on ? '' : 'off'}">${i.label}</div>`)
@@ -368,11 +363,6 @@ els.settingsLink.addEventListener('click', (e) => {
 });
 
 globalThis.ScreenClickTheme?.bindThemeToggle(document.getElementById('theme-toggle'));
-
-globalThis.ScreenClickShortcuts?.bindPageShortcuts({
-  allowToggle: () => true,
-  allowCapture: () => globalThis.ScreenClickShortcuts?.keyboardCaptureAllowed(popupSession),
-});
 
 chrome.storage.onChanged.addListener((changes, area) => {
   if (area === 'local' && !savingPdf) {

@@ -2,21 +2,10 @@ globalThis.ScreenClickTheme?.applyStoredTheme();
 globalThis.ScreenClickTheme?.listenThemeChanges();
 globalThis.ScreenClickTheme?.bindThemeToggle(document.getElementById('theme-toggle'));
 
-(function buildShortcutChips() {
-  globalThis.ScreenClickShortcuts?.applyShortcutLabels?.();
-  const hint = document.getElementById('shortcut-platform-hint');
-  if (hint && globalThis.ScreenClickShortcuts) {
-    const sc = globalThis.ScreenClickShortcuts;
-    hint.textContent = sc.isMac
-      ? 'On Mac use Cmd+Shift+1 and Cmd+Shift+2 (set in chrome://extensions/shortcuts if needed). Toggle-start defaults to Visible Tab; use the side panel to pick Process Record or Screen mode.'
-      : 'On Windows use Ctrl+Shift+1 and Ctrl+Shift+2 (set in chrome://extensions/shortcuts if needed). Toggle-start defaults to Visible Tab; use the side panel to pick Process Record or Screen mode.';
-  }
-})();
-
 const DEFAULTS = {
-  triggers: { click: true, keyboard: true, timer: false },
-  screenTriggers: { keyboard: true, timer: false },
-  processTriggers: { click: true, inputChange: true, keyboard: true, timer: false },
+  triggers: { click: true, keyboard: false, timer: false },
+  screenTriggers: { keyboard: false, timer: false },
+  processTriggers: { click: true, inputChange: true, keyboard: false, timer: false },
   processOptions: { onlyInteractive: true, debounceMs: 250 },
   timerInterval: 10000,
   screenTimerInterval: 10000,
@@ -26,7 +15,6 @@ const DEFAULTS = {
 
 const els = {
   click: document.getElementById('trigger-click'),
-  kbd: document.getElementById('trigger-keyboard'),
   tmr: document.getElementById('trigger-timer'),
   timerConfig: document.getElementById('timer-config'),
   interval: document.getElementById('timer-interval'),
@@ -34,15 +22,12 @@ const els = {
   qualityVal: document.getElementById('image-quality-value'),
   saveBtn: document.getElementById('save-btn'),
   saveStatus: document.getElementById('save-status'),
-  openShortcuts: document.getElementById('open-shortcuts'),
   procClick: document.getElementById('proc-click'),
   procOnlyInteractive: document.getElementById('proc-only-interactive'),
   procInputChange: document.getElementById('proc-input-change'),
-  procKeyboard: document.getElementById('proc-keyboard'),
   procTimer: document.getElementById('proc-timer'),
   procTimerConfig: document.getElementById('proc-timer-config'),
   procInterval: document.getElementById('proc-timer-interval'),
-  screenKbd: document.getElementById('screen-keyboard'),
   screenTmr: document.getElementById('screen-timer'),
   screenTimerConfig: document.getElementById('screen-timer-config'),
   screenInterval: document.getElementById('screen-timer-interval'),
@@ -73,7 +58,6 @@ async function load() {
   s.processOptions = { ...DEFAULTS.processOptions, ...(s.processOptions || {}) };
 
   els.click.checked = s.triggers.click ?? s.triggers.doubleClick ?? true;
-  els.kbd.checked = s.triggers.keyboard;
   els.tmr.checked = s.triggers.timer;
   els.interval.value = Math.round(s.timerInterval / 1000);
   els.quality.value = s.imageQuality;
@@ -82,10 +66,8 @@ async function load() {
   els.procClick.checked = s.processTriggers.click;
   els.procOnlyInteractive.checked = s.processOptions.onlyInteractive;
   els.procInputChange.checked = s.processTriggers.inputChange;
-  els.procKeyboard.checked = s.processTriggers.keyboard;
   els.procTimer.checked = s.processTriggers.timer;
 
-  els.screenKbd.checked = s.screenTriggers.keyboard !== false;
   els.screenTmr.checked = !!s.screenTriggers.timer;
   const screenSec = s.screenTimerInterval || s.timerInterval || DEFAULTS.screenTimerInterval;
   els.screenInterval.value = Math.round(screenSec / 1000);
@@ -99,17 +81,17 @@ async function save() {
   const settings = {
     triggers: {
       click: els.click.checked,
-      keyboard: els.kbd.checked,
+      keyboard: false,
       timer: els.tmr.checked,
     },
     screenTriggers: {
-      keyboard: els.screenKbd.checked,
+      keyboard: false,
       timer: els.screenTmr.checked,
     },
     processTriggers: {
       click: els.procClick.checked,
       inputChange: els.procInputChange.checked,
-      keyboard: els.procKeyboard.checked,
+      keyboard: false,
       timer: els.procTimer.checked,
     },
     processOptions: {
@@ -138,11 +120,6 @@ els.screenTmr.addEventListener('change', updateTimerConfigVisibility);
 els.procTimer.addEventListener('change', updateTimerConfigVisibility);
 
 els.saveBtn.addEventListener('click', save);
-
-els.openShortcuts.addEventListener('click', (e) => {
-  e.preventDefault();
-  chrome.tabs.create({ url: 'chrome://extensions/shortcuts' });
-});
 
 chrome.storage.onChanged.addListener((changes, area) => {
   if (area !== 'local' || !changes.theme) return;

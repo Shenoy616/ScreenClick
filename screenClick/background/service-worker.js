@@ -1,12 +1,12 @@
 // Service worker. Manifest V3.
 // Responsibilities: session state, capture orchestration for three target
-// modes (visible tab, full page, entire screen), timer, keyboard command,
+// modes (visible tab, full page, entire screen), timer, activation command,
 // offscreen document lifecycle, downloads, badge updates.
 
 const DEFAULT_SETTINGS = {
-  triggers: { click: true, keyboard: true, timer: false },
-  screenTriggers: { keyboard: true, timer: false },
-  processTriggers: { click: true, inputChange: true, keyboard: true, timer: false },
+  triggers: { click: true, keyboard: false, timer: false },
+  screenTriggers: { keyboard: false, timer: false },
+  processTriggers: { click: true, inputChange: true, keyboard: false, timer: false },
   processOptions: { onlyInteractive: true, debounceMs: 250 },
   timerInterval: 10000,
   screenTimerInterval: 10000,
@@ -896,8 +896,7 @@ async function triggerTimerCapture() {
   const { exportPending } = await chrome.storage.local.get('exportPending');
   if (exportPending) return;
   if (!wantsTimerForTarget(settings, captureTarget)) return;
-  // visible-tab and process modes: route through content script so the
-  // green ring and (for process) the step label are produced there.
+  // visible-tab and process modes: route through content script (no highlight for timer).
   if ((captureTarget === 'visible' || captureTarget === 'process') && tabId) {
     try {
       await chrome.tabs.sendMessage(tabId, { type: 'TIMER_TRIGGER' }, { frameId: 0 });
@@ -996,10 +995,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         await ensureStepIds();
         sendResponse({ ok: true });
       } else if (msg.type === 'MANUAL_CAPTURE') {
-        await handleCaptureCommand({ manual: true });
-        sendResponse({ ok: true });
-      } else if (msg.type === 'KEYBOARD_CAPTURE_SHORTCUT') {
-        await handleCaptureCommand({ manual: false });
+        await handleManualCapture();
         sendResponse({ ok: true });
       } else if (msg.type === 'CAPTURE_NOW') {
         await captureNow({
@@ -1031,13 +1027,11 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   return true;
 });
 
-// ---------- Keyboard commands ----------
+// ---------- Activation command ----------
 
 chrome.commands.onCommand.addListener(async (command) => {
   try {
-    if (command === 'capture-screenshot') {
-      await handleCaptureCommand();
-    } else if (command === 'stop-and-save' || command === 'toggle-recording') {
+    if (command === 'stop-and-save' || command === 'toggle-recording') {
       await handleToggleCommand();
     } else {
       console.warn('[QA Tool] unhandled command:', command);
@@ -1047,18 +1041,7 @@ chrome.commands.onCommand.addListener(async (command) => {
   }
 });
 
-function keyboardCaptureEnabled(settings, captureTarget, { manual = false } = {}) {
-  if (manual) return true;
-  if (captureTarget === 'screen') {
-    return (settings.screenTriggers || {}).keyboard !== false;
-  }
-  if (captureTarget === 'process') {
-    return (settings.processTriggers || {}).keyboard !== false;
-  }
-  return (settings.triggers || {}).keyboard !== false;
-}
-
-async function handleCaptureCommand({ manual = false } = {}) {
+async function handleManualCapture() {
   const now = Date.now();
   if (now - lastKeyboardCaptureAt < KEYBOARD_CAPTURE_DEBOUNCE_MS) return;
   lastKeyboardCaptureAt = now;
@@ -1067,9 +1050,8 @@ async function handleCaptureCommand({ manual = false } = {}) {
   const { exportPending } = await chrome.storage.local.get('exportPending');
   if (exportPending) return;
 
-  const { isRecording, activeTabId: tabId, captureTarget, settings } = await getState();
+  const { isRecording, activeTabId: tabId, captureTarget } = await getState();
   if (!isRecording) return;
-  if (!keyboardCaptureEnabled(settings, captureTarget, { manual })) return;
 
   if (captureTarget === 'screen') {
     if (!(await isLauncherWindowOpen())) {
@@ -1088,29 +1070,17 @@ async function handleCaptureCommand({ manual = false } = {}) {
       return;
     }
     await flashBadge('…', 500, '#3b82f6');
-    captureNow({ source: manual ? 'manual' : 'keyboard' });
+    captureNow({ source: 'manual' });
     return;
   }
 
   if ((captureTarget === 'visible' || captureTarget === 'process') && tabId) {
-    if (manual) {
-      try {
-        await chrome.tabs.sendMessage(tabId, { type: 'MANUAL_CAPTURE_TRIGGER' }, { frameId: 0 });
-        return;
-      } catch { /* fall through */ }
-    }
     try {
-      await chrome.tabs.sendMessage(tabId, {
-        type: 'KEYBOARD_TRIGGER',
-      }, { frameId: 0 });
+      await chrome.tabs.sendMessage(tabId, { type: 'MANUAL_CAPTURE_TRIGGER' }, { frameId: 0 });
       return;
     } catch { /* fall through */ }
   }
-  captureNow({
-    source: captureTarget === 'process'
-      ? (manual ? 'manual' : 'process-keyboard')
-      : (manual ? 'manual' : 'keyboard'),
-  });
+  captureNow({ source: 'manual' });
 }
 
 function defaultFilename() {
@@ -1143,7 +1113,7 @@ async function handleToggleCommand() {
     await handleStopAndSaveCommand();
     return;
   }
-  // Start: default to visible-tab mode since the shortcut has no UI to ask.
+  // Start: default to visible-tab mode since activation has no UI to ask.
   try {
     await chrome.storage.local.remove('lastCaptureError');
     const result = await startRecording('visible');
@@ -1180,16 +1150,15 @@ async function flashBadge(text, holdMs = 1500, bgColor = '#f59e0b') {
 async function warnIfShortcutsUnassigned() {
   try {
     const commands = await chrome.commands.getAll();
-    const missing = commands.filter((c) => !c.shortcut);
-    if (!missing.length) {
+    const toggle = commands.find((c) => c.name === 'toggle-recording');
+    if (toggle?.shortcut) {
       await chrome.storage.local.set({ shortcutsNeedSetup: false });
       return;
     }
     await chrome.storage.local.set({ shortcutsNeedSetup: true });
     await flashBadge('⌨', 6000, '#f59e0b');
     console.warn(
-      '[QA Tool] Keyboard shortcuts not assigned in Chrome. Open chrome://extensions/shortcuts and set:',
-      missing.map((c) => c.name).join(', '),
+      '[QA Tool] Activation shortcut not assigned in Chrome. Open chrome://extensions/shortcuts and set toggle-recording.',
     );
   } catch { /* ignore */ }
 }

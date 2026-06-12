@@ -27,24 +27,13 @@
         <div class="info-section-title">Active triggers</div>
         <div id="trigger-list" class="trigger-list">Loading...</div>
       </div>
-      <div class="info-divider"></div>
-      <div class="info-section shortcut-section">
-        <div class="shortcut-row">
-          <code class="shortcut-chip" data-key="1"></code>
-          <span>Start capturing or stop and save PDF</span>
-        </div>
-        <div class="shortcut-row">
-          <code class="shortcut-chip" data-key="2"></code>
-          <span>Capture screenshot (while recording)</span>
-        </div>
-      </div>
     </div>
 
     <div id="target-picker" class="target-picker hidden">
       <div class="picker-title">Choose what to capture</div>
       <button class="target-btn" data-target="visible">
         <div class="target-name">Visible Tab</div>
-        <div class="target-desc">Screenshot the active tab on click or shortcut. Reorder or remove before export.</div>
+        <div class="target-desc">Screenshot the active tab on click. Use the capture button while recording. Reorder or remove before export.</div>
       </button>
       <button class="target-btn" data-target="process">
         <div class="target-name">Process Record</div>
@@ -52,7 +41,7 @@
       </button>
       <button class="target-btn" data-target="screen">
         <div class="target-name">Screen or Window</div>
-        <div class="target-desc">Screenshot your monitor or an app window. <span class="shortcut-inline" data-key="2"></span> per shot · reorder or remove before export.</div>
+        <div class="target-desc">Screenshot your monitor or an app window. Use the capture button for each shot · reorder or remove before export.</div>
       </button>
       <button id="target-cancel" class="btn btn-ghost btn-small">Cancel</button>
     </div>
@@ -89,7 +78,6 @@
     </footer>
   </div>
 
-  <script src="../shared/shortcuts.js"></script>
   <script src="popup.js"></script>
 </body>
 </html>
