@@ -1164,9 +1164,12 @@ async function warnIfShortcutsUnassigned() {
 }
 
 chrome.runtime.onInstalled.addListener(async () => {
-  const data = await chrome.storage.local.get('settings');
+  const data = await chrome.storage.local.get(['settings', 'theme']);
   if (!data.settings) {
     await chrome.storage.local.set({ settings: DEFAULT_SETTINGS });
+  }
+  if (data.theme == null) {
+    await chrome.storage.local.set({ theme: 'dark' });
   }
   if (chrome.sidePanel) {
     try {

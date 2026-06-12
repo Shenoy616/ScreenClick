@@ -12,8 +12,10 @@
   async function applyStoredTheme() {
     try {
       const { theme } = await chrome.storage.local.get('theme');
-      setTheme(theme === 'dark' ? 'dark' : 'light');
-    } catch { /* ignore */ }
+      setTheme(theme === 'light' ? 'light' : 'dark');
+    } catch {
+      setTheme('dark');
+    }
   }
 
   async function toggleTheme() {
@@ -53,4 +55,6 @@
     bindThemeToggle,
     listenThemeChanges,
   };
+
+  applyStoredTheme();
 })(typeof globalThis !== 'undefined' ? globalThis : window);
