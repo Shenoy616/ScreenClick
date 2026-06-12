@@ -172,7 +172,7 @@ async function ensureSidePanelEnabled(tabId, windowId) {
     if (tabId != null) await chrome.sidePanel.setOptions({ ...opts, tabId });
     else await chrome.sidePanel.setOptions(opts);
   } catch (e) {
-    console.warn('[ScreenClick] sidePanel.setOptions:', e?.message || e);
+    console.warn('[Uni Capture] sidePanel.setOptions:', e?.message || e);
   }
 }
 
@@ -181,11 +181,11 @@ function openSidePanelNow(windowId, tabId) {
   if (!chrome.sidePanel?.open) return;
   if (tabId != null) {
     chrome.sidePanel.open({ tabId }).catch((e) => {
-      console.warn('[ScreenClick] sidePanel.open:', e?.message || e);
+      console.warn('[Uni Capture] sidePanel.open:', e?.message || e);
     });
   } else if (windowId != null) {
     chrome.sidePanel.open({ windowId }).catch((e) => {
-      console.warn('[ScreenClick] sidePanel.open:', e?.message || e);
+      console.warn('[Uni Capture] sidePanel.open:', e?.message || e);
     });
   }
 }
@@ -666,7 +666,7 @@ async function signalCapturePending(captureTarget) {
   if (captureTarget === 'screen') {
     await flashBadge('…', 1200, '#3b82f6');
     try {
-      await chrome.action.setTitle({ title: 'ScreenClick — capturing…' });
+      await chrome.action.setTitle({ title: 'Uni Capture — capturing…' });
     } catch { /* ignore */ }
     if (launcherPort) {
       try {
@@ -680,7 +680,7 @@ async function clearCapturePending(ok, errMsg, captureTarget) {
   await chrome.storage.local.remove('captureInProgress');
   if (captureTarget === 'screen') {
     try {
-      await chrome.action.setTitle({ title: 'ScreenClick' });
+      await chrome.action.setTitle({ title: 'Uni Capture' });
     } catch { /* ignore */ }
     if (launcherPort) {
       try {
@@ -1113,10 +1113,10 @@ async function handleToggleCommand() {
     await handleStopAndSaveCommand();
     return;
   }
-  // Start: default to visible-tab mode since activation has no UI to ask.
+  // Start: default to process-record mode since activation has no UI to ask.
   try {
     await chrome.storage.local.remove('lastCaptureError');
-    const result = await startRecording('visible');
+    const result = await startRecording('process');
     if (result && result.pending) {
       // Wouldn't happen for visible mode, but defensive.
       return;

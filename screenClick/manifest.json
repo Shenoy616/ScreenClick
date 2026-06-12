@@ -1,9 +1,9 @@
 {
   "manifest_version": 3,
   "minimum_chrome_version": "116",
-  "name": "ScreenClick",
+  "name": "Uni Capture",
   "version": "1.0.0",
-  "description": "Capture screenshots during QA: visible tab, full page, entire screen, or step-by-step process recording. Export as PDF.",
+  "description": "Step-by-step process recording for QA workflows. Capture numbered Points on click and export as a labeled PDF.",
   "permissions": [
     "activeTab",
     "storage",
@@ -39,7 +39,7 @@
         "default": "Ctrl+Shift+1",
         "mac": "Command+Shift+1"
       },
-      "description": "Activate ScreenClick (start or stop capturing)"
+      "description": "Activate Uni Capture (start or stop capturing)"
     }
   },
   "icons": {

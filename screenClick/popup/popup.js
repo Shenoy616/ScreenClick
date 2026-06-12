@@ -34,7 +34,7 @@ const DEFAULT_SETTINGS = {
 };
 
 let savingPdf = false;
-let popupSession = { isRecording: false, captureTarget: 'visible', settings: null };
+let popupSession = { isRecording: false, captureTarget: 'process', settings: null };
 let recordingAutoCloseTimer = null;
 let recordingAutoCloseEnabled = false;
 let pointerOverPopup = false;
@@ -53,7 +53,7 @@ function openSidePanelNow() {
       : null;
   if (!opts) return;
   chrome.sidePanel.open(opts).catch((e) => {
-    console.warn('[ScreenClick popup] sidePanel.open:', e?.message || e);
+    console.warn('[Uni Capture popup] sidePanel.open:', e?.message || e);
   });
 }
 
@@ -125,43 +125,18 @@ async function getState() {
     isRecording: !!data.isRecording,
     screenshotCount: (data.screenshots || []).length,
     settings,
-    captureTarget: data.captureTarget || 'visible',
+    captureTarget: data.captureTarget || 'process',
     lastCaptureError: data.lastCaptureError || null,
     captureInProgress: !!data.captureInProgress,
   };
 }
 
-function renderTriggers(settings, target) {
-  if (target === 'process') {
-    const p = settings.processTriggers || { click: true, inputChange: false, keyboard: false, timer: false };
-    const items = [
-      { label: 'Single click on interactive elements', on: p.click },
-      { label: 'Form input fill (blur, idle, Enter)', on: p.inputChange },
-      { label: `Timer (every ${Math.round((settings.processTimerInterval || settings.timerInterval) / 1000)}s)`, on: p.timer },
-      { label: 'Capture button', on: true },
-    ];
-    els.triggerList.innerHTML = items
-      .map((i) => `<div class="trigger-item ${i.on ? '' : 'off'}">${i.label}</div>`)
-      .join('');
-    return;
-  }
-  if (target === 'screen') {
-    const s = settings.screenTriggers || {};
-    const sec = Math.round((settings.screenTimerInterval || settings.timerInterval) / 1000);
-    const items = [
-      { label: `Timer (every ${sec}s)`, on: !!s.timer },
-      { label: 'Capture button', on: true },
-    ];
-    els.triggerList.innerHTML = items
-      .map((i) => `<div class="trigger-item ${i.on ? '' : 'off'}">${i.label}</div>`)
-      .join('');
-    return;
-  }
-  const t = settings.triggers || {};
-  const clickOn = (t.click ?? t.doubleClick ?? true) && target === 'visible';
+function renderTriggers(settings) {
+  const p = settings.processTriggers || { click: true, inputChange: false, keyboard: false, timer: false };
   const items = [
-    { label: target === 'visible' ? 'Click' : 'Click (visible tab only)', on: clickOn },
-    { label: `Timer (every ${Math.round(settings.timerInterval / 1000)}s)`, on: t.timer },
+    { label: 'Single click on interactive elements', on: p.click },
+    { label: 'Form input fill (blur, idle, Enter)', on: p.inputChange },
+    { label: `Timer (every ${Math.round((settings.processTimerInterval || settings.timerInterval) / 1000)}s)`, on: p.timer },
     { label: 'Capture button', on: true },
   ];
   els.triggerList.innerHTML = items
@@ -174,7 +149,7 @@ async function render() {
   popupSession.isRecording = state.isRecording;
   popupSession.captureTarget = state.captureTarget;
   popupSession.settings = state.settings;
-  renderTriggers(state.settings, state.captureTarget);
+  renderTriggers(state.settings);
 
   const filenameOpen = !els.filenameSection.classList.contains('hidden');
 

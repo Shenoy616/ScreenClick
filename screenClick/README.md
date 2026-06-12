@@ -1,4 +1,4 @@
-# ScreenClick
+# Uni Capture
 
 A Chrome extension for QA testers. Capture screenshots while exploring a page via:
 
@@ -83,7 +83,7 @@ Note: double-click triggers only work in visible-tab mode. In full-page or entir
 Chrome does not let extensions set the shortcut directly. To change it:
 
 1. Go to `chrome://extensions/shortcuts`
-2. Find "ScreenClick"
+2. Find "Uni Capture"
 3. Click the pencil icon next to "Capture screenshot during recording"
 4. Press your new combination
 
@@ -113,7 +113,7 @@ screenClick/
 
 ## Troubleshooting
 
-Open `chrome://extensions`, find **ScreenClick**, and click **service worker** (or **Inspect views: offscreen.html**) to see console logs prefixed with `[QA Tool]`.
+Open `chrome://extensions`, find **Uni Capture**, and click **service worker** (or **Inspect views: offscreen.html**) to see console logs prefixed with `[QA Tool]`.
 
 Common issues:
 

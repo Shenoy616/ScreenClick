@@ -2,7 +2,7 @@
 <html lang="en" data-theme="dark">
 <head>
   <meta charset="UTF-8">
-  <title>ScreenClick - Settings</title>
+  <title>Uni Capture - Settings</title>
   <link rel="stylesheet" href="options.css">
   <script src="../shared/theme.js"></script>
 </head>
@@ -12,7 +12,7 @@
       <div class="page-header-copy">
         <h1>
           <img src="../icons/icon-48.png" alt="" class="header-icon brand-icon">
-          ScreenClick
+          Uni Capture
         </h1>
         <p class="subtitle">Settings</p>
       </div>
@@ -32,34 +32,8 @@
     </header>
 
     <section class="card">
-      <h2>Standard Triggers</h2>
-      <p class="hint">Apply to <strong>Visible Tab</strong> mode.</p>
-
-      <label class="row">
-        <input type="checkbox" id="trigger-click">
-        <div>
-          <div class="row-title">Click</div>
-          <div class="row-desc">Capture when the user single-clicks anywhere on the page. If all triggers are off, use <strong>Capture screenshot</strong> in the side panel.</div>
-        </div>
-      </label>
-
-      <label class="row">
-        <input type="checkbox" id="trigger-timer">
-        <div>
-          <div class="row-title">Timer</div>
-          <div class="row-desc">Capture automatically at a set interval.</div>
-        </div>
-      </label>
-
-      <div class="row sub-row" id="timer-config">
-        <label for="timer-interval">Interval (seconds)</label>
-        <input type="number" id="timer-interval" min="2" max="600" step="1">
-      </div>
-    </section>
-
-    <section class="card">
-      <h2>Process Record Mode</h2>
-      <p class="hint">Triggers that fire while in Process Record mode. Each capture becomes a numbered Point in the PDF.</p>
+      <h2>Process Record</h2>
+      <p class="hint">Triggers that fire while recording. Each capture becomes a numbered Point in the PDF.</p>
 
       <label class="row">
         <input type="checkbox" id="proc-click">
@@ -96,24 +70,6 @@
       <div class="row sub-row" id="proc-timer-config">
         <label for="proc-timer-interval">Interval (seconds)</label>
         <input type="number" id="proc-timer-interval" min="2" max="600" step="1" value="10">
-      </div>
-    </section>
-
-    <section class="card">
-      <h2>Screen or Window mode</h2>
-      <p class="hint">Desktop screenshots of your monitor or an app window.</p>
-
-      <label class="row">
-        <input type="checkbox" id="screen-timer">
-        <div>
-          <div class="row-title">Timer</div>
-          <div class="row-desc">Capture automatically at the interval below while recording.</div>
-        </div>
-      </label>
-
-      <div class="row sub-row" id="screen-timer-config">
-        <label for="screen-timer-interval">Interval (seconds)</label>
-        <input type="number" id="screen-timer-interval" min="2" max="600" step="1" value="10">
       </div>
     </section>
 

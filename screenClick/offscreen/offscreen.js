@@ -184,7 +184,7 @@ function drawAttestBanner(pdf, margin, contentW, y) {
   pdf.setFont(undefined, 'normal');
   pdf.setFontSize(8.5);
   attestText(pdf, ATTEST_STYLE.white);
-  pdf.text('ScreenClick  ·  On-device export  ·  Cryptographic integrity record', margin + 14, y + 38);
+  pdf.text('Uni Capture  ·  On-device export  ·  Cryptographic integrity record', margin + 14, y + 38);
   return y + bannerH + 12;
 }
 
@@ -302,7 +302,7 @@ function addAttestationPage(pdf, attestation, margin) {
     ['Session start (UTC)', formatUtcShort(attestation.sessionStartUtc)],
     ['Session end (UTC)', formatUtcShort(attestation.sessionEndUtc)],
     ['Total captures', String(attestation.captureCount)],
-    ['Record version', 'ScreenClick v1.0.0'],
+    ['Record version', 'Uni Capture v1.0.0'],
   ], pageH);
 
   y = ensureAttestSpace(pdf, y, 36, margin, pageH, null);
@@ -409,7 +409,7 @@ async function buildPdf(screenshots, settings, sessionMeta = {}) {
   const { entries, chainRoot } = await buildCaptureManifest(screenshots);
   const manifest = {
     version: 1,
-    generator: 'ScreenClick',
+    generator: 'Uni Capture',
     sessionStartUtc,
     sessionEndUtc,
     captureCount: screenshots.length,
