@@ -8,6 +8,18 @@
   }
 })();
 
+(function initDownloadLinks() {
+  const config = window.SCREENCLICK_SITE || {};
+  const fileName = 'screenclick.zip';
+  const downloadPath = config.downloadUrl || fileName;
+  const downloadUrl = new URL(downloadPath, document.baseURI).href;
+
+  document.querySelectorAll('a[href$="screenclick.zip"]').forEach((link) => {
+    link.href = downloadUrl;
+    link.setAttribute('download', fileName);
+  });
+})();
+
 const CATEGORIES = [
   { id: 'all', label: 'All teams' },
   { id: 'professional', label: 'Enterprise' },

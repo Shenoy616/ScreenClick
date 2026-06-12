@@ -174,15 +174,24 @@ async function ensureSidePanelEnabled(tabId, windowId) {
   }
 }
 
+// sidePanel.open() must run in the same turn as the user gesture (before await) or Chrome blocks it.
+function openSidePanelNow(windowId, tabId) {
+  if (!chrome.sidePanel?.open) return;
+  if (tabId != null) {
+    chrome.sidePanel.open({ tabId }).catch((e) => {
+      console.warn('[ScreenClick] sidePanel.open:', e?.message || e);
+    });
+  } else if (windowId != null) {
+    chrome.sidePanel.open({ windowId }).catch((e) => {
+      console.warn('[ScreenClick] sidePanel.open:', e?.message || e);
+    });
+  }
+}
+
 async function openStepsPanel(windowId, tabId) {
   if (!chrome.sidePanel) return;
+  openSidePanelNow(windowId, tabId);
   await ensureSidePanelEnabled(tabId, windowId);
-  try {
-    if (tabId != null) await chrome.sidePanel.open({ tabId });
-    else if (windowId != null) await chrome.sidePanel.open({ windowId });
-  } catch (e) {
-    console.warn('[ScreenClick] Could not open side panel:', e?.message || e);
-  }
 }
 
 async function ensureStepIds() {
@@ -1166,12 +1175,11 @@ async function warnIfShortcutsUnassigned() {
   } catch { /* ignore */ }
 }
 
-chrome.action.onClicked.addListener(async (tab) => {
-  try {
-    await openStepsPanel(tab.windowId, tab.id);
-  } catch (e) {
-    console.warn('[QA Tool] toolbar click:', e?.message || e);
-  }
+chrome.action.onClicked.addListener((tab) => {
+  openSidePanelNow(tab?.windowId, tab?.id);
+  ensureSidePanelEnabled(tab?.id, tab?.windowId).catch((e) => {
+    console.warn('[ScreenClick] toolbar click:', e?.message || e);
+  });
 });
 
 chrome.runtime.onInstalled.addListener(async () => {
