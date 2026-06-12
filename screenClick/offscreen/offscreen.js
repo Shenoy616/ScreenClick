@@ -302,7 +302,7 @@ function addAttestationPage(pdf, attestation, margin) {
     ['Session start (UTC)', formatUtcShort(attestation.sessionStartUtc)],
     ['Session end (UTC)', formatUtcShort(attestation.sessionEndUtc)],
     ['Total captures', String(attestation.captureCount)],
-    ['Record version', 'ScreenClick manifest v1'],
+    ['Record version', 'ScreenClick v1.0.0'],
   ], pageH);
 
   y = ensureAttestSpace(pdf, y, 36, margin, pageH, null);

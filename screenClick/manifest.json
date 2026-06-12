@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "minimum_chrome_version": "116",
   "name": "ScreenClick",
-  "version": "1.5.0",
+  "version": "1.0.0",
   "description": "Capture screenshots during QA: visible tab, full page, entire screen, or step-by-step process recording. Export as PDF.",
   "permissions": [
     "activeTab",
