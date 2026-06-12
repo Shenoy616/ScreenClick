@@ -25,6 +25,7 @@
   /* Semantic aliases used across extension UI */
   --text: var(--ink);
   --text-dim: var(--ink-mid);
+  --text-placeholder: #c4c2b8;
   --card: var(--surface-elevated);
   --surface-2: var(--surface);
 
@@ -65,6 +66,12 @@
   --picker-hover-ring: rgba(217, 119, 87, 0.14);
 }
 
+input::placeholder,
+textarea::placeholder {
+  color: var(--text-placeholder);
+  opacity: 1;
+}
+
 html[data-theme="dark"] {
   --bg: #141413;
   --surface: #1c1b19;
@@ -87,6 +94,7 @@ html[data-theme="dark"] {
   --danger-soft: rgba(239, 68, 68, 0.14);
 
   --card: var(--surface-elevated);
+  --text-placeholder: #8a8880;
   --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.28);
   --shadow-md: 0 8px 32px rgba(0, 0, 0, 0.38);
 

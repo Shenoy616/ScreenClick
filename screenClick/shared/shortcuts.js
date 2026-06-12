@@ -1,4 +1,4 @@
-// Shared shortcuts: Shift+Control+1 (toggle) and Shift+Control+2 (capture).
+// Shared shortcuts: Cmd+Shift+1 / Ctrl+Shift+1 (toggle) and +2 (capture).
 (function (root) {
   const IS_MAC = (() => {
     const data = navigator.userAgentData;
@@ -20,8 +20,8 @@
   };
 
   function hasShortcutModifier(e) {
-    // On Mac, Chrome often registers Control+Shift for extension commands; accept Command too.
-    if (IS_MAC) return e.ctrlKey || e.metaKey;
+    // Mac: Command+Shift (manifest default). Windows: Ctrl+Shift. Accept both modifiers on Mac.
+    if (IS_MAC) return e.metaKey || e.ctrlKey;
     return e.ctrlKey;
   }
 
@@ -89,11 +89,28 @@
   }
 
   function shortcutLabel(digit) {
-    return `Shift-Control+${digit}`;
+    return IS_MAC ? `Cmd+Shift+${digit}` : `Ctrl+Shift+${digit}`;
   }
 
   function shortcutChip(digit) {
-    return IS_MAC ? `^⇧${digit}` : `Ctrl+Shift+${digit}`;
+    return shortcutLabel(digit);
+  }
+
+  function applyShortcutLabels(root = document) {
+    root.querySelectorAll('.shortcut-chip, .shortcut-inline').forEach((el) => {
+      const key = el.getAttribute('data-key');
+      if (!key) return;
+      el.textContent = shortcutChip(key);
+    });
+  }
+
+  function keyboardCaptureAllowed(session) {
+    if (!session?.isRecording) return false;
+    const settings = session.settings || {};
+    const target = session.captureTarget || 'visible';
+    if (target === 'screen') return (settings.screenTriggers || {}).keyboard !== false;
+    if (target === 'process') return (settings.processTriggers || {}).keyboard !== false;
+    return (settings.triggers || {}).keyboard !== false;
   }
 
   root.ScreenClickShortcuts = {
@@ -105,6 +122,9 @@
     bindPageShortcuts,
     shortcutLabel,
     shortcutChip,
-    modKeyLabel: 'Control',
+    applyShortcutLabels,
+    keyboardCaptureAllowed,
+    modKeyLabel: IS_MAC ? 'Command' : 'Control',
+    isMac: IS_MAC,
   };
 })(typeof globalThis !== 'undefined' ? globalThis : window);

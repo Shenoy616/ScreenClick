@@ -1,5 +1,11 @@
 // Launcher: chrome.desktopCapture picker + frame grabs for Screen or Window mode.
 
+globalThis.ScreenClickShortcuts?.applyShortcutLabels?.();
+
+function captureShortcutText() {
+  return globalThis.ScreenClickShortcuts?.shortcutChip('2') || 'Ctrl+Shift+2';
+}
+
 const statusEl = document.getElementById('status');
 
 let launcherPort = null;
@@ -217,7 +223,7 @@ function notifySessionStarted() {
     }
     if (response && response.ok) {
       setLauncherReady();
-      setStatus('Ready — Ctrl+Shift+2 or Capture in the side panel. Keep this window open.');
+      setStatus(`Ready — ${captureShortcutText()} or Capture in the side panel. Keep this window open.`);
       if (launcherPort) {
         try {
           launcherPort.postMessage({ type: 'LAUNCHER_STREAM_READY' });
@@ -402,7 +408,7 @@ function onLauncherPortMessage(msg) {
     if (msg.phase === 'start') setStatus('Capturing…');
     else if (msg.phase === 'done') {
       setLauncherReady();
-      setStatus('Saved — Ctrl+Shift+2 for next. Keep this window open.');
+      setStatus(`Saved — ${captureShortcutText()} for next. Keep this window open.`);
     } else if (msg.phase === 'err') {
       setStatus(msg.error || 'Capture failed', true);
     }

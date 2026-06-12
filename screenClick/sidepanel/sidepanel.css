@@ -67,6 +67,10 @@ body.has-floating-dock .panel-main {
   margin-top: 2px;
 }
 
+.panel-sub:empty {
+  display: none;
+}
+
 .recording-dot {
   width: 10px;
   height: 10px;
@@ -231,33 +235,6 @@ html[data-theme="dark"] .capture-success {
   opacity: 0.9;
 }
 
-.empty-tips {
-  list-style: none;
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: 6px;
-  margin: 16px auto 0;
-  max-width: 300px;
-}
-
-.empty-tips li {
-  font-size: 11px;
-  line-height: 1.35;
-  color: var(--text-dim);
-  background: var(--card);
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  padding: 5px 10px;
-  white-space: nowrap;
-}
-
-.empty-tip-key {
-  font-weight: 600;
-  color: var(--text);
-  font-variant-numeric: tabular-nums;
-}
-
 .empty-title {
   font-weight: 600;
   color: var(--text);
@@ -280,189 +257,6 @@ html[data-theme="dark"] .capture-success {
 .empty-foot strong {
   font-weight: 600;
   color: var(--text);
-}
-
-.empty-guide-title {
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--text-dim);
-  margin: 18px auto 10px;
-  max-width: 280px;
-  width: 100%;
-  text-align: left;
-}
-
-.empty-guide-note {
-  font-size: 12px;
-  line-height: 1.5;
-  color: var(--text-dim);
-  max-width: 280px;
-  margin: 12px auto 0;
-  text-align: left;
-}
-
-.recording-waiting {
-  padding: 16px 14px 24px;
-  text-align: center;
-  color: var(--text-dim);
-}
-
-.recording-waiting-title {
-  font-weight: 600;
-  color: var(--text);
-  font-size: 15px;
-  margin-bottom: 8px;
-}
-
-.recording-waiting-lead {
-  font-size: 13px;
-  line-height: 1.55;
-  max-width: 34ch;
-  margin: 0 auto;
-}
-
-.recording-waiting .empty-guide-title {
-  margin-top: 20px;
-}
-
-.empty-guide {
-  position: relative;
-  max-width: 280px;
-  margin: 20px auto 0;
-  text-align: left;
-}
-
-.empty-guide-card {
-  background: var(--card);
-  border: 2px solid var(--border);
-  border-radius: 12px;
-  box-shadow: var(--shadow);
-  overflow: hidden;
-  pointer-events: none;
-  user-select: none;
-}
-
-.empty-guide-card .step-card-header {
-  display: flex;
-  align-items: flex-start;
-  gap: 10px;
-  padding: 10px 10px 8px;
-}
-
-.empty-guide-card .step-badge {
-  flex-shrink: 0;
-  width: 24px;
-  height: 24px;
-  font-size: 11px;
-}
-
-.empty-guide-field-wrap {
-  gap: 4px;
-}
-
-.empty-guide-legend {
-  display: block;
-  font-size: 10px;
-  font-weight: 600;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-  color: var(--accent);
-  padding-left: 2px;
-}
-
-.empty-guide-shot-block {
-  padding: 0 10px 10px;
-}
-
-.empty-guide-shot-block .empty-guide-legend {
-  margin-bottom: 6px;
-}
-
-.empty-guide-point {
-  width: 100%;
-  min-height: 36px;
-  border-radius: 8px;
-  font-size: 13px;
-  line-height: 1.45;
-  padding: 8px 10px;
-}
-
-.empty-guide-point--sample {
-  border: 1px solid var(--border);
-  background: var(--bg);
-  color: var(--text);
-  font-weight: 500;
-}
-
-.empty-guide-point--empty {
-  border: 1px dashed var(--border);
-  background: var(--card);
-  color: var(--text-dim);
-  font-weight: 400;
-  font-style: italic;
-}
-
-.empty-guide-thumb {
-  margin: 0;
-  height: 52px;
-  border-radius: var(--radius-sm);
-  border: 1px solid var(--border);
-  background: linear-gradient(145deg, #e8e6dc 0%, #f3f1ea 100%);
-}
-
-html[data-theme="dark"] .empty-guide-thumb {
-  background: linear-gradient(145deg, #2e2d2a 0%, #222120 100%);
-}
-
-.empty-guide-pointer {
-  position: absolute;
-  right: 4px;
-  top: 10px;
-  display: flex;
-  flex-direction: column-reverse;
-  align-items: flex-end;
-  gap: 4px;
-  animation: empty-pointer-nudge 2.4s ease-in-out infinite;
-  filter: drop-shadow(0 2px 6px rgba(15, 23, 42, 0.18));
-  max-width: calc(100% - 48px);
-}
-
-html[data-theme="dark"] .empty-guide-pointer {
-  filter: drop-shadow(0 2px 8px rgba(0, 0, 0, 0.45));
-}
-
-@keyframes empty-pointer-nudge {
-  0%, 100% { transform: translate(0, 0); }
-  50% { transform: translate(-5px, 3px); }
-}
-
-.empty-guide-cursor {
-  display: block;
-  margin-left: 6px;
-}
-
-.empty-guide-callout {
-  position: relative;
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.01em;
-  color: #fff;
-  background: var(--accent);
-  padding: 5px 9px;
-  border-radius: 6px;
-  white-space: nowrap;
-  box-shadow: 0 2px 8px rgba(249, 115, 22, 0.35);
-}
-
-.empty-guide-callout::before {
-  content: '';
-  position: absolute;
-  right: 14px;
-  bottom: -5px;
-  border: 5px solid transparent;
-  border-top-color: var(--accent);
 }
 
 .target-picker {
@@ -610,7 +404,7 @@ html[data-theme="dark"] .empty-guide-pointer {
 }
 
 .step-label-input::placeholder {
-  color: var(--text-dim);
+  color: var(--text-placeholder);
   font-weight: 400;
 }
 

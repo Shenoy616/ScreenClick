@@ -3,13 +3,9 @@
 // Apply theme as early as possible to avoid flash of wrong theme on open.
 globalThis.ScreenClickTheme?.applyStoredTheme();
 
-const CAPTURE_SHORTCUT = globalThis.ScreenClickShortcuts?.shortcutLabel('2') || 'Shift-Control+2';
+const CAPTURE_SHORTCUT = globalThis.ScreenClickShortcuts?.shortcutLabel('2') || 'Ctrl+Shift+2';
 
-document.querySelectorAll('.shortcut-chip').forEach((el) => {
-  const key = el.getAttribute('data-key');
-  if (!key) return;
-  el.textContent = globalThis.ScreenClickShortcuts?.shortcutLabel(key) || `Shift-Control+${key}`;
-});
+globalThis.ScreenClickShortcuts?.applyShortcutLabels?.();
 
 const els = {
   captureBtn: document.getElementById('capture-btn'),
@@ -42,7 +38,7 @@ const DEFAULT_SETTINGS = {
 };
 
 let savingPdf = false;
-let popupSession = { isRecording: false, captureTarget: 'visible' };
+let popupSession = { isRecording: false, captureTarget: 'visible', settings: null };
 let recordingAutoCloseTimer = null;
 let recordingAutoCloseEnabled = false;
 let pointerOverPopup = false;
@@ -76,6 +72,12 @@ function cachePopupTarget() {
 
 cachePopupTarget();
 
+function canAutoClosePopup() {
+  if (!els.filenameSection.classList.contains('hidden')) return false;
+  if (!els.targetPicker.classList.contains('hidden')) return true;
+  return popupSession.isRecording;
+}
+
 function clearRecordingAutoCloseTimer() {
   if (recordingAutoCloseTimer) {
     clearTimeout(recordingAutoCloseTimer);
@@ -101,7 +103,7 @@ function armRecordingAutoClose() {
 }
 
 function scheduleRecordingAutoClose() {
-  if (!els.filenameSection.classList.contains('hidden')) return;
+  if (!canAutoClosePopup()) return;
   recordingAutoCloseEnabled = true;
   armRecordingAutoClose();
 }
@@ -176,6 +178,7 @@ async function render() {
   const state = await getState();
   popupSession.isRecording = state.isRecording;
   popupSession.captureTarget = state.captureTarget;
+  popupSession.settings = state.settings;
   renderTriggers(state.settings, state.captureTarget);
 
   const filenameOpen = !els.filenameSection.classList.contains('hidden');
@@ -200,7 +203,6 @@ async function render() {
       : String(state.screenshotCount);
     scheduleRecordingAutoClose();
   } else {
-    clearRecordingAutoClose();
     els.captureBtn.classList.add('hidden');
     els.stopBtn.classList.add('hidden');
     els.discardBtn.classList.add('hidden');
@@ -211,7 +213,12 @@ async function render() {
     } else {
       els.counterSection.classList.add('hidden');
     }
-    if (!filenameOpen) showTargetPicker();
+    if (!filenameOpen) {
+      showTargetPicker();
+      scheduleRecordingAutoClose();
+    } else {
+      clearRecordingAutoClose();
+    }
   }
 }
 
@@ -238,6 +245,7 @@ function showTargetPicker() {
   els.targetPicker.classList.remove('hidden');
   els.primaryActions.classList.add('hidden');
   els.infoPanel.classList.add('hidden');
+  scheduleRecordingAutoClose();
 }
 
 function hideTargetPicker() {
@@ -363,7 +371,7 @@ globalThis.ScreenClickTheme?.bindThemeToggle(document.getElementById('theme-togg
 
 globalThis.ScreenClickShortcuts?.bindPageShortcuts({
   allowToggle: () => true,
-  allowCapture: () => popupSession.isRecording && popupSession.captureTarget === 'screen',
+  allowCapture: () => globalThis.ScreenClickShortcuts?.keyboardCaptureAllowed(popupSession),
 });
 
 chrome.storage.onChanged.addListener((changes, area) => {

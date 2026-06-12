@@ -1,17 +1,16 @@
 globalThis.ScreenClickTheme?.applyStoredTheme();
 globalThis.ScreenClickTheme?.listenThemeChanges();
+globalThis.ScreenClickTheme?.bindThemeToggle(document.getElementById('theme-toggle'));
 
 (function buildShortcutChips() {
-  document.querySelectorAll('.shortcut-chip').forEach((el) => {
-    const key = el.getAttribute('data-key');
-    if (!key) return;
-    const useShift = el.getAttribute('data-shift') !== 'false';
-    if (useShift) {
-      el.textContent = globalThis.ScreenClickShortcuts?.shortcutLabel(key) || `Shift-Control+${key}`;
-    } else {
-      el.textContent = `Control+${key}`;
-    }
-  });
+  globalThis.ScreenClickShortcuts?.applyShortcutLabels?.();
+  const hint = document.getElementById('shortcut-platform-hint');
+  if (hint && globalThis.ScreenClickShortcuts) {
+    const sc = globalThis.ScreenClickShortcuts;
+    hint.textContent = sc.isMac
+      ? 'On Mac use Cmd+Shift+1 and Cmd+Shift+2 (set in chrome://extensions/shortcuts if needed). Toggle-start defaults to Visible Tab; use the side panel to pick Process Record or Screen mode.'
+      : 'On Windows use Ctrl+Shift+1 and Ctrl+Shift+2 (set in chrome://extensions/shortcuts if needed). Toggle-start defaults to Visible Tab; use the side panel to pick Process Record or Screen mode.';
+  }
 })();
 
 const DEFAULTS = {

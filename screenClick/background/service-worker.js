@@ -70,7 +70,9 @@ let timerHandle = null;
 let captureChain = Promise.resolve();
 let lastCaptureAt = 0;
 let lastKeyboardCaptureAt = 0;
+let lastToggleAt = 0;
 const KEYBOARD_CAPTURE_DEBOUNCE_MS = 350;
+const TOGGLE_DEBOUNCE_MS = 400;
 /** @type {chrome.runtime.Port | null} */
 let launcherPort = null;
 
@@ -898,7 +900,7 @@ async function triggerTimerCapture() {
   // green ring and (for process) the step label are produced there.
   if ((captureTarget === 'visible' || captureTarget === 'process') && tabId) {
     try {
-      await chrome.tabs.sendMessage(tabId, { type: 'TIMER_TRIGGER' });
+      await chrome.tabs.sendMessage(tabId, { type: 'TIMER_TRIGGER' }, { frameId: 0 });
       return;
     } catch {
       // fall through to direct capture
@@ -1045,6 +1047,17 @@ chrome.commands.onCommand.addListener(async (command) => {
   }
 });
 
+function keyboardCaptureEnabled(settings, captureTarget, { manual = false } = {}) {
+  if (manual) return true;
+  if (captureTarget === 'screen') {
+    return (settings.screenTriggers || {}).keyboard !== false;
+  }
+  if (captureTarget === 'process') {
+    return (settings.processTriggers || {}).keyboard !== false;
+  }
+  return (settings.triggers || {}).keyboard !== false;
+}
+
 async function handleCaptureCommand({ manual = false } = {}) {
   const now = Date.now();
   if (now - lastKeyboardCaptureAt < KEYBOARD_CAPTURE_DEBOUNCE_MS) return;
@@ -1056,10 +1069,9 @@ async function handleCaptureCommand({ manual = false } = {}) {
 
   const { isRecording, activeTabId: tabId, captureTarget, settings } = await getState();
   if (!isRecording) return;
+  if (!keyboardCaptureEnabled(settings, captureTarget, { manual })) return;
 
   if (captureTarget === 'screen') {
-    const st = settings.screenTriggers || settings.triggers || {};
-    if (!manual && st.keyboard === false) return;
     if (!(await isLauncherWindowOpen())) {
       await chrome.storage.local.set({
         lastCaptureError: 'Screen helper window is closed. Keep it open (minimize is OK) while capturing.',
@@ -1081,10 +1093,16 @@ async function handleCaptureCommand({ manual = false } = {}) {
   }
 
   if ((captureTarget === 'visible' || captureTarget === 'process') && tabId) {
+    if (manual) {
+      try {
+        await chrome.tabs.sendMessage(tabId, { type: 'MANUAL_CAPTURE_TRIGGER' }, { frameId: 0 });
+        return;
+      } catch { /* fall through */ }
+    }
     try {
       await chrome.tabs.sendMessage(tabId, {
-        type: manual ? 'MANUAL_CAPTURE_TRIGGER' : 'KEYBOARD_TRIGGER',
-      });
+        type: 'KEYBOARD_TRIGGER',
+      }, { frameId: 0 });
       return;
     } catch { /* fall through */ }
   }
@@ -1092,9 +1110,6 @@ async function handleCaptureCommand({ manual = false } = {}) {
     source: captureTarget === 'process'
       ? (manual ? 'manual' : 'process-keyboard')
       : (manual ? 'manual' : 'keyboard'),
-    ...(captureTarget === 'process' && manual
-      ? { elementInfo: { label: 'manual', kind: 'manual', text: '', tag: '' } }
-      : {}),
   });
 }
 
@@ -1119,6 +1134,10 @@ async function handleStopAndSaveCommand() {
 }
 
 async function handleToggleCommand() {
+  const now = Date.now();
+  if (now - lastToggleAt < TOGGLE_DEBOUNCE_MS) return;
+  lastToggleAt = now;
+
   const { isRecording } = await getState();
   if (isRecording) {
     await handleStopAndSaveCommand();

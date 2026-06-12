@@ -112,14 +112,23 @@
 
   function drawRing(x, y) {
     return new Promise((resolve) => {
-      const ring = document.createElement('div');
-      ring.className = 'qa-click-ring';
-      ring.style.left = x + 'px';
-      ring.style.top = y + 'px';
-      (document.body || document.documentElement).appendChild(ring);
-      ring.offsetHeight;
+      const marker = document.createElement('div');
+      marker.className = 'qa-click-marker';
+      marker.style.left = x + 'px';
+      marker.style.top = y + 'px';
+
+      const circle = document.createElement('span');
+      circle.className = 'qa-click-ring-circle';
+
+      const cursor = document.createElement('span');
+      cursor.className = 'qa-click-ring-cursor';
+
+      marker.appendChild(circle);
+      marker.appendChild(cursor);
+      (document.body || document.documentElement).appendChild(marker);
+      marker.offsetHeight;
       setTimeout(() => resolve(), 180);
-      setTimeout(() => ring.remove(), 1300);
+      setTimeout(() => marker.remove(), 1300);
     });
   }
 
@@ -158,7 +167,7 @@
   document.addEventListener('click', (e) => {
     if (!STATE.isRecording || STATE.exportPending || STATE.captureTarget !== 'visible') return;
     if (!STATE.triggers.click) return;
-    if (e.target?.closest?.('.qa-click-ring, .qa-recording-indicator')) return;
+    if (e.target?.closest?.('.qa-click-marker, .qa-recording-indicator')) return;
     const now = Date.now();
     const gap = STATE.processOptions.debounceMs || 250;
     if (now - STATE.lastVisibleClickAt < gap) return;
@@ -225,6 +234,42 @@
     return { element: e.target || null, identified: false };
   }
 
+  function elementAtClientPoint(x, y) {
+    try {
+      const el = document.elementFromPoint(x, y);
+      if (!el || el.nodeType !== 1) return null;
+      if (el.closest?.('.qa-click-marker, .qa-recording-indicator')) return null;
+      return el;
+    } catch {
+      return null;
+    }
+  }
+
+  // Resolve button/link Point labels at a screen position (click, keyboard, manual, timer).
+  function buildProcessPointPayload(x, y, { withActionLabel = true } = {}) {
+    const start = elementAtClientPoint(x, y);
+    if (!start) return {};
+
+    const { element: clickTarget, identified } = resolveProcessClickTarget({
+      target: start,
+      composedPath: () => [start],
+    });
+
+    let info;
+    if (identified && clickTarget) {
+      info = describeElement(labelTargetFor(clickTarget));
+    } else {
+      const link = findLinkElement(start);
+      info = describeElement(link || start);
+    }
+
+    const payload = { elementInfo: info };
+    if (withActionLabel && hasMeaningfulPoint(info)) {
+      payload.actionLabel = `Clicked ${info.label}`;
+    }
+    return payload;
+  }
+
   function hasMeaningfulPoint(info) {
     if (!info) return false;
     if ((info.text || '').trim()) return true;
@@ -240,35 +285,15 @@
     if (now - STATE.lastClickAt < STATE.processOptions.debounceMs) return;
     STATE.lastClickAt = now;
 
-    if (e.target?.closest?.('.qa-click-ring, .qa-recording-indicator')) return;
+    if (e.target?.closest?.('.qa-click-marker, .qa-recording-indicator')) return;
 
     const { element: clickTarget, identified } = resolveProcessClickTarget(e);
 
     if (identified && clickTarget) {
       if (STATE.processTriggers.inputChange && isTextInput(clickTarget)) return;
-
-      const info = describeElement(labelTargetFor(clickTarget));
-      const payload = {
-        elementInfo: info,
-      };
-      if (hasMeaningfulPoint(info)) {
-        payload.actionLabel = `Clicked ${info.label}`;
-      }
-      triggerCapture(e.clientX, e.clientY, 'process-click', payload);
-      return;
     }
 
-    // No intrinsic control: still label when the click is inside a link.
-    const link = findLinkElement(e.target);
-    if (link) {
-      const info = describeElement(link);
-      const payload = { elementInfo: info };
-      if (hasMeaningfulPoint(info)) payload.actionLabel = `Clicked ${info.label}`;
-      triggerCapture(e.clientX, e.clientY, 'process-click', payload);
-      return;
-    }
-
-    triggerCapture(e.clientX, e.clientY, 'process-click', {});
+    triggerCapture(e.clientX, e.clientY, 'process-click', buildProcessPointPayload(e.clientX, e.clientY));
   }, true);
 
   // ---------- Process Record: input fill ----------
@@ -711,39 +736,61 @@
   chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     try {
       if (msg.type === 'KEYBOARD_TRIGGER') {
+        if (window !== window.top) {
+          sendResponse({ ok: true, skipped: 'subframe' });
+          return;
+        }
         const wantsIt = STATE.captureTarget === 'process'
           ? STATE.processTriggers.keyboard
           : STATE.triggers.keyboard;
         if (STATE.isRecording && !STATE.exportPending && wantsIt) {
           if (STATE.captureTarget === 'process') {
-            triggerCapture(STATE.lastMouse.x, STATE.lastMouse.y, 'process-keyboard', {
-              elementInfo: { label: 'manual', kind: 'manual', text: '', tag: '' },
-            });
+            const { x, y } = STATE.lastMouse;
+            triggerCapture(x, y, 'process-keyboard', buildProcessPointPayload(x, y));
           } else {
             triggerCapture(STATE.lastMouse.x, STATE.lastMouse.y, 'keyboard');
           }
         }
         sendResponse({ ok: true });
+      } else if (msg.type === 'PRE_CAPTURE_RING') {
+        if (window !== window.top) {
+          sendResponse({ ok: true, skipped: 'subframe' });
+          return;
+        }
+        if (STATE.isRecording && !STATE.exportPending
+            && (STATE.captureTarget === 'visible' || STATE.captureTarget === 'process')) {
+          drawRing(STATE.lastMouse.x, STATE.lastMouse.y)
+            .then(() => sendResponse({ ok: true }))
+            .catch(() => sendResponse({ ok: false }));
+          return true;
+        }
+        sendResponse({ ok: true });
       } else if (msg.type === 'MANUAL_CAPTURE_TRIGGER') {
+        if (window !== window.top) {
+          sendResponse({ ok: true, skipped: 'subframe' });
+          return;
+        }
         if (STATE.isRecording && !STATE.exportPending) {
           if (STATE.captureTarget === 'process') {
-            triggerCapture(STATE.lastMouse.x, STATE.lastMouse.y, 'manual', {
-              elementInfo: { label: 'manual', kind: 'manual', text: '', tag: '' },
-            });
+            const { x, y } = STATE.lastMouse;
+            triggerCapture(x, y, 'manual', buildProcessPointPayload(x, y));
           } else {
             triggerCapture(STATE.lastMouse.x, STATE.lastMouse.y, 'manual');
           }
         }
         sendResponse({ ok: true });
       } else if (msg.type === 'TIMER_TRIGGER') {
+        if (window !== window.top) {
+          sendResponse({ ok: true, skipped: 'subframe' });
+          return;
+        }
         const wantsIt = STATE.captureTarget === 'process'
           ? STATE.processTriggers.timer
           : STATE.triggers.timer;
         if (STATE.isRecording && !STATE.exportPending && wantsIt) {
           if (STATE.captureTarget === 'process') {
-            triggerCapture(STATE.lastMouse.x, STATE.lastMouse.y, 'process-timer', {
-              elementInfo: { label: 'timer', kind: 'timer', text: '', tag: '' },
-            });
+            const { x, y } = STATE.lastMouse;
+            triggerCapture(x, y, 'process-timer', buildProcessPointPayload(x, y, { withActionLabel: false }));
           } else {
             triggerCapture(STATE.lastMouse.x, STATE.lastMouse.y, 'timer');
           }

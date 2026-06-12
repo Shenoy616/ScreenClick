@@ -2,6 +2,7 @@
 
 globalThis.ScreenClickTheme?.applyStoredTheme();
 globalThis.ScreenClickTheme?.bindThemeToggle(document.getElementById('theme-toggle'));
+globalThis.ScreenClickShortcuts?.applyShortcutLabels?.();
 globalThis.ScreenClickTheme?.listenThemeChanges();
 
 const TARGET_LABELS = {
@@ -20,7 +21,6 @@ const CAPTURE_FEEDBACK_LABELS = {
 
 const els = {
   empty: document.getElementById('empty-state'),
-  recordingWaiting: document.getElementById('recording-waiting'),
   list: document.getElementById('step-list'),
   meta: document.getElementById('session-meta'),
   badge: document.getElementById('recording-badge'),
@@ -169,29 +169,24 @@ function captureTooltipText() {
   return `Capture screenshot (${captureShortcutChip()})`;
 }
 
+let manualCaptureInFlight = false;
+
 async function triggerManualCapture() {
-  if (!session.isRecording || session.captureInProgress) return;
+  if (manualCaptureInFlight || !session.isRecording || session.captureInProgress) return;
+  manualCaptureInFlight = true;
   clearError();
   try {
     await chrome.runtime.sendMessage({ type: 'MANUAL_CAPTURE' });
   } catch (e) {
     showError(e.message || 'Capture failed.');
+  } finally {
+    setTimeout(() => { manualCaptureInFlight = false; }, 500);
   }
 }
 
 function renderEmptyState() {
-  const show = shouldShowEmptyState();
+  const show = shouldShowEmptyState() && !isProcessRecordMode();
   els.empty.classList.toggle('hidden', !show);
-  if (!show) return;
-
-  const shotVariant = document.getElementById('empty-screenshots');
-  const processVariant = document.getElementById('empty-process');
-  const shortcutEl = document.getElementById('empty-capture-shortcut');
-  const processMode = isProcessRecordMode();
-
-  if (shotVariant) shotVariant.classList.toggle('hidden', processMode);
-  if (processVariant) processVariant.classList.toggle('hidden', !processMode);
-  if (shortcutEl) shortcutEl.textContent = captureShortcutChip();
 }
 
 function panelHintText() {
@@ -210,6 +205,7 @@ function captureUnitLabel(count) {
 }
 
 function panelTitleText() {
+  if (!session.isRecording) return 'Ready to Capture';
   return isProcessRecordMode() ? 'Session steps' : 'Session screenshots';
 }
 
@@ -311,25 +307,17 @@ function syncCaptureSkeleton() {
   }
 }
 
-function syncRecordingWaiting() {
-  const show = session.isRecording && !screenshots.length && !session.captureInProgress;
-  if (els.recordingWaiting) els.recordingWaiting.classList.toggle('hidden', !show);
-}
-
 function syncStepListIncremental() {
   if (!screenshots.length) {
     if (session.captureInProgress) {
-      syncRecordingWaiting();
       els.empty.classList.add('hidden');
       els.list.classList.remove('hidden');
       els.list.innerHTML = captureSkeletonMarkup();
     } else if (session.isRecording) {
-      syncRecordingWaiting();
       els.empty.classList.add('hidden');
       els.list.classList.add('hidden');
       els.list.innerHTML = '';
     } else {
-      syncRecordingWaiting();
       els.empty.classList.toggle('hidden', !shouldShowEmptyState());
       els.list.classList.add('hidden');
       els.list.innerHTML = '';
@@ -339,7 +327,6 @@ function syncStepListIncremental() {
   }
 
   els.empty.classList.add('hidden');
-  if (els.recordingWaiting) els.recordingWaiting.classList.add('hidden');
   els.list.classList.remove('hidden');
   syncCaptureSkeleton();
 
@@ -374,17 +361,14 @@ function syncStepListIncremental() {
 function rebuildStepList() {
   if (!screenshots.length) {
     if (session.captureInProgress) {
-      syncRecordingWaiting();
       els.empty.classList.add('hidden');
       els.list.classList.remove('hidden');
       els.list.innerHTML = captureSkeletonMarkup();
     } else if (session.isRecording) {
-      syncRecordingWaiting();
       els.empty.classList.add('hidden');
       els.list.classList.add('hidden');
       els.list.innerHTML = '';
     } else {
-      syncRecordingWaiting();
       els.empty.classList.toggle('hidden', !shouldShowEmptyState());
       els.list.classList.add('hidden');
       els.list.innerHTML = '';
@@ -406,7 +390,6 @@ function rebuildStepList() {
 
   const skeleton = session.captureInProgress ? captureSkeletonMarkup() : '';
   els.empty.classList.add('hidden');
-  if (els.recordingWaiting) els.recordingWaiting.classList.add('hidden');
   els.list.classList.remove('hidden');
   els.list.innerHTML = skeleton + screenshots.map((shot, index) => buildStepCardHtml(shot, index)).join('');
 
@@ -524,7 +507,6 @@ function showTargetPicker() {
   pickerOpen = true;
   clearError();
   els.empty.classList.add('hidden');
-  if (els.recordingWaiting) els.recordingWaiting.classList.add('hidden');
   els.list.classList.add('hidden');
   els.targetPicker.classList.remove('hidden');
   els.targetPicker.querySelectorAll('.target-btn').forEach((btn) => {
@@ -603,7 +585,7 @@ function renderHeader() {
     } else {
       els.meta.textContent = screenshots.length
         ? `${captureUnitLabel(screenshots.length)} in session`
-        : 'Ready to capture';
+        : '';
     }
     hideFilenamePanel();
     if (!pickerOpen && !screenshots.length) {
@@ -858,7 +840,7 @@ if (els.headerCaptureBtn) {
 
 globalThis.ScreenClickShortcuts?.bindPageShortcuts({
   allowToggle: () => true,
-  allowCapture: () => session.isRecording && session.captureTarget === 'screen',
+  allowCapture: () => globalThis.ScreenClickShortcuts?.keyboardCaptureAllowed(session),
 });
 
 els.stopBtn.addEventListener('click', () => {
