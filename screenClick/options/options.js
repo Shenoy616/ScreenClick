@@ -1,18 +1,16 @@
 globalThis.ScreenClickTheme?.applyStoredTheme();
 globalThis.ScreenClickTheme?.listenThemeChanges();
 
-// Build shortcut chip labels using the platform-correct modifier.
 (function buildShortcutChips() {
-  const data = navigator.userAgentData;
-  const isMac = (data && data.platform)
-    ? /mac/i.test(data.platform)
-    : /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent || '');
-  const mod = isMac ? 'Command' : 'Control';
   document.querySelectorAll('.shortcut-chip').forEach((el) => {
     const key = el.getAttribute('data-key');
     if (!key) return;
     const useShift = el.getAttribute('data-shift') !== 'false';
-    el.textContent = useShift ? `Shift-${mod}+${key}` : `${mod}+${key}`;
+    if (useShift) {
+      el.textContent = globalThis.ScreenClickShortcuts?.shortcutLabel(key) || `Shift-Control+${key}`;
+    } else {
+      el.textContent = `Control+${key}`;
+    }
   });
 })();
 
@@ -23,6 +21,7 @@ const DEFAULTS = {
   processOptions: { onlyInteractive: true, debounceMs: 250 },
   timerInterval: 10000,
   screenTimerInterval: 10000,
+  processTimerInterval: 10000,
   imageQuality: 0.8,
 };
 
@@ -42,6 +41,8 @@ const els = {
   procInputChange: document.getElementById('proc-input-change'),
   procKeyboard: document.getElementById('proc-keyboard'),
   procTimer: document.getElementById('proc-timer'),
+  procTimerConfig: document.getElementById('proc-timer-config'),
+  procInterval: document.getElementById('proc-timer-interval'),
   screenKbd: document.getElementById('screen-keyboard'),
   screenTmr: document.getElementById('screen-timer'),
   screenTimerConfig: document.getElementById('screen-timer-config'),
@@ -58,6 +59,9 @@ function updateTimerConfigVisibility() {
   }
   if (els.screenTimerConfig) {
     els.screenTimerConfig.classList.toggle('hidden', !els.screenTmr.checked);
+  }
+  if (els.procTimerConfig) {
+    els.procTimerConfig.classList.toggle('hidden', !els.procTimer.checked);
   }
 }
 
@@ -86,6 +90,8 @@ async function load() {
   els.screenTmr.checked = !!s.screenTriggers.timer;
   const screenSec = s.screenTimerInterval || s.timerInterval || DEFAULTS.screenTimerInterval;
   els.screenInterval.value = Math.round(screenSec / 1000);
+  const procSec = s.processTimerInterval || s.timerInterval || DEFAULTS.processTimerInterval;
+  els.procInterval.value = Math.round(procSec / 1000);
 
   updateTimerConfigVisibility();
 }
@@ -113,6 +119,7 @@ async function save() {
     },
     timerInterval: clampIntervalSec(els.interval.value) * 1000,
     screenTimerInterval: clampIntervalSec(els.screenInterval.value) * 1000,
+    processTimerInterval: clampIntervalSec(els.procInterval.value) * 1000,
     imageQuality: parseFloat(els.quality.value),
   };
   await chrome.storage.local.set({ settings });
@@ -129,6 +136,7 @@ els.quality.addEventListener('input', () => {
 
 els.tmr.addEventListener('change', updateTimerConfigVisibility);
 els.screenTmr.addEventListener('change', updateTimerConfigVisibility);
+els.procTimer.addEventListener('change', updateTimerConfigVisibility);
 
 els.saveBtn.addEventListener('click', save);
 

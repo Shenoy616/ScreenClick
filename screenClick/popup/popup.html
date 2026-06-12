@@ -44,7 +44,7 @@
       <div class="picker-title">Choose what to capture</div>
       <button class="target-btn" data-target="visible">
         <div class="target-name">Visible Tab</div>
-        <div class="target-desc">Current viewport of the active tab. Click anywhere to capture.</div>
+        <div class="target-desc">Screenshot the active tab on click or shortcut. Reorder or remove before export.</div>
       </button>
       <button class="target-btn" data-target="process">
         <div class="target-name">Process Record</div>
@@ -52,7 +52,7 @@
       </button>
       <button class="target-btn" data-target="screen">
         <div class="target-name">Screen or Window</div>
-        <div class="target-desc">Still screenshots of your monitor or an app window. Pick a display in Chrome’s dialog. ⌘⇧2 / Ctrl+Shift+2 per shot.</div>
+        <div class="target-desc">Screenshot your monitor or an app window. Ctrl+Shift+2 per shot · reorder or remove before export.</div>
       </button>
       <button id="target-cancel" class="btn btn-ghost btn-small">Cancel</button>
     </div>
@@ -89,6 +89,7 @@
     </footer>
   </div>
 
+  <script src="../shared/shortcuts.js"></script>
   <script src="popup.js"></script>
 </body>
 </html>

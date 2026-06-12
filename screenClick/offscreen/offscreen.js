@@ -175,7 +175,7 @@ function ensureAttestSpace(pdf, y, needed, margin, pageH, onNewPage) {
 
 function drawAttestBanner(pdf, margin, contentW, y) {
   const bannerH = 54;
-  attestRgb(pdf, ATTEST_STYLE.banner);
+  attestRgb(pdf, ATTEST_STYLE.accent);
   pdf.rect(margin, y, contentW, bannerH, 'F');
   pdf.setFont(undefined, 'bold');
   pdf.setFontSize(17);
@@ -183,7 +183,7 @@ function drawAttestBanner(pdf, margin, contentW, y) {
   pdf.text('Session Attestation Certificate', margin + 14, y + 22);
   pdf.setFont(undefined, 'normal');
   pdf.setFontSize(8.5);
-  attestText(pdf, ATTEST_STYLE.subtle);
+  attestText(pdf, ATTEST_STYLE.white);
   pdf.text('ScreenClick  ·  On-device export  ·  Cryptographic integrity record', margin + 14, y + 38);
   return y + bannerH + 12;
 }
@@ -317,6 +317,18 @@ function addAttestationPage(pdf, attestation, margin) {
   drawAttestFooter(pdf, margin, pageW, pageH, y);
 }
 
+function processPointLabel(shot) {
+  const label = (shot.actionLabel || '').trim();
+  if (!label) return '';
+  const src = shot.source || '';
+  if (/^Manual step \d+$/i.test(label) && (src === 'manual' || src === 'process-keyboard' || src === 'keyboard')) {
+    return '';
+  }
+  if (/^Periodic step \d+$/i.test(label) && (src === 'timer' || src === 'process-timer')) return '';
+  if (label === 'Capture' && src === 'process-click') return '';
+  return label;
+}
+
 async function buildPdf(screenshots, settings, sessionMeta = {}) {
   const pdf = new jsPDF({
     orientation: 'landscape',
@@ -363,20 +375,22 @@ async function buildPdf(screenshots, settings, sessionMeta = {}) {
     let imgY = margin + headerH;
     if (isProcess) {
       const step = shot.stepNumber || (i + 1);
-      const label = shot.actionLabel || 'Capture';
+      const label = processPointLabel(shot);
       pdf.setFontSize(13);
       pdf.setTextColor(20);
       pdf.setFont(undefined, 'bold');
       const stepText = `Step ${step}:`;
       pdf.text(stepText, margin, margin + headerH + 12);
-      pdf.setFont(undefined, 'normal');
-      pdf.setTextColor(60);
-      // Width of "Step N: " so we can place the action label right after.
-      const stepTextWidth = pdf.getTextWidth(stepText + ' ');
-      // Truncate long labels so they fit on one line.
-      const maxLabelWidth = availW - stepTextWidth;
-      const truncated = fitText(pdf, label, maxLabelWidth);
-      pdf.text(truncated, margin + stepTextWidth, margin + headerH + 12);
+      if (label) {
+        pdf.setFont(undefined, 'normal');
+        pdf.setTextColor(60);
+        // Width of "Step N: " so we can place the action label right after.
+        const stepTextWidth = pdf.getTextWidth(stepText + ' ');
+        // Truncate long labels so they fit on one line.
+        const maxLabelWidth = availW - stepTextWidth;
+        const truncated = fitText(pdf, label, maxLabelWidth);
+        pdf.text(truncated, margin + stepTextWidth, margin + headerH + 12);
+      }
       imgY = margin + headerH + stepBandH;
     }
 

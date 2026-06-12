@@ -10,6 +10,7 @@ const DEFAULT_SETTINGS = {
   processOptions: { onlyInteractive: true, debounceMs: 250 },
   timerInterval: 10000,
   screenTimerInterval: 10000,
+  processTimerInterval: 10000,
   imageQuality: 0.8,
   includeTimestamp: true,
 };
@@ -17,6 +18,9 @@ const DEFAULT_SETTINGS = {
 function getTimerIntervalMs(settings, captureTarget) {
   if (captureTarget === 'screen') {
     return settings.screenTimerInterval || settings.timerInterval || DEFAULT_SETTINGS.screenTimerInterval;
+  }
+  if (captureTarget === 'process') {
+    return settings.processTimerInterval || settings.timerInterval || DEFAULT_SETTINGS.processTimerInterval;
   }
   return settings.timerInterval || DEFAULT_SETTINGS.timerInterval;
 }
@@ -82,12 +86,60 @@ function makeStepId() {
   return `step_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
 }
 
-function renumberSteps(list) {
+function renumberSteps(list, { processMode = false } = {}) {
   return list.map((shot, i) => {
     const next = { ...shot };
-    if (next.stepNumber != null) next.stepNumber = i + 1;
+    if (processMode || next.stepNumber != null) next.stepNumber = i + 1;
     return next;
   });
+}
+
+function defaultProcessActionLabel(source, stepNum, meta = {}) {
+  const fromMeta = normalizeProcessActionLabel(source, meta.actionLabel);
+  switch (source) {
+    case 'timer':
+    case 'process-timer':
+      return fromMeta || '';
+    case 'keyboard':
+    case 'process-keyboard':
+    case 'manual':
+      return fromMeta || '';
+    case 'process-input':
+      return fromMeta || `Filled field (step ${stepNum})`;
+    case 'process-click':
+      return fromMeta || '';
+    default:
+      return fromMeta || `Step ${stepNum}`;
+  }
+}
+
+function isLegacyAutoProcessLabel(source, actionLabel) {
+  const label = (actionLabel ?? '').trim();
+  if (!label) return false;
+  if (/^Manual step \d+$/i.test(label)) {
+    return source === 'manual' || source === 'process-keyboard' || source === 'keyboard';
+  }
+  if (/^Periodic step \d+$/i.test(label)) {
+    return source === 'timer' || source === 'process-timer';
+  }
+  if (label === 'Capture' && source === 'process-click') return true;
+  return false;
+}
+
+function normalizeProcessActionLabel(source, actionLabel) {
+  if (isLegacyAutoProcessLabel(source, actionLabel)) return '';
+  return (actionLabel ?? '').trim();
+}
+
+function finalizeProcessCapture(record, list, meta) {
+  const stepNum = list.length + 1;
+  record.stepNumber = stepNum;
+  if (!record.actionLabel) {
+    const label = defaultProcessActionLabel(record.source, stepNum, meta);
+    if (label) record.actionLabel = label;
+  }
+  list.push(record);
+  return renumberSteps(list, { processMode: true });
 }
 
 function findStepIndex(list, id) {
@@ -160,7 +212,8 @@ async function deleteStep(id) {
   const idx = findStepIndex(screenshots, id);
   if (idx === -1) throw new Error('Step not found.');
   const list = screenshots.filter((_, i) => i !== idx);
-  const renumbered = renumberSteps(list);
+  const { captureTarget } = await getState();
+  const renumbered = renumberSteps(list, { processMode: captureTarget === 'process' });
   await setState({ screenshots: renumbered });
   await syncProcessStepCounter();
   await updateBadge();
@@ -176,7 +229,8 @@ async function moveStep(id, direction) {
   const list = screenshots.map((s) => ({ ...s }));
   const [item] = list.splice(idx, 1);
   list.splice(next, 0, item);
-  await setState({ screenshots: renumberSteps(list) });
+  const { captureTarget } = await getState();
+  await setState({ screenshots: renumberSteps(list, { processMode: captureTarget === 'process' }) });
   await syncProcessStepCounter();
   await updateBadge();
 }
@@ -371,6 +425,7 @@ async function startRecording(target, _screenStreamId, options = {}) {
     return { pending: true };
   }
 
+  await chrome.storage.local.remove('exportPending');
   await setState({
     isRecording: true,
     screenshots: [],
@@ -420,15 +475,40 @@ async function openScreenLauncher(tabId) {
 
 async function pushRecordingStateToTab(tabId) {
   const { isRecording, captureTarget, settings } = await getState();
+  const { exportPending } = await chrome.storage.local.get('exportPending');
   try {
     await chrome.tabs.sendMessage(tabId, {
       type: 'RECORDING_STATE',
       isRecording,
       captureTarget,
       settings,
+      exportPending: !!exportPending,
     });
   } catch (e) {
     console.warn('[QA Tool] RECORDING_STATE push failed:', e?.message || e);
+  }
+}
+
+async function setExportPending(pending) {
+  if (pending) {
+    await chrome.storage.local.set({ exportPending: true });
+  } else {
+    await chrome.storage.local.remove('exportPending');
+  }
+  const { activeTabId } = await getState();
+  if (activeTabId) await pushRecordingStateToTab(activeTabId);
+}
+
+async function prepareExport() {
+  stopTimer();
+  await setExportPending(true);
+}
+
+async function cancelExport() {
+  await setExportPending(false);
+  const { isRecording, settings, captureTarget } = await getState();
+  if (isRecording && wantsTimerForTarget(settings, captureTarget)) {
+    startTimer(getTimerIntervalMs(settings, captureTarget));
   }
 }
 
@@ -453,6 +533,7 @@ async function ensureContentScript(tabId) {
 
 async function stopAndSave(filename) {
   stopTimer();
+  await chrome.storage.local.remove('exportPending');
   const { screenshots, settings, captureTarget } = await getState();
 
   if (captureTarget === 'screen') {
@@ -496,6 +577,7 @@ function sanitizeFilename(name) {
 
 async function discardSession() {
   stopTimer();
+  await chrome.storage.local.remove('exportPending');
   const { captureTarget } = await getState();
   if (captureTarget === 'screen') {
     await stopScreenCaptureSession();
@@ -615,6 +697,8 @@ async function doCapture(meta) {
   await clearStaleCapturePending();
   const state = await getState();
   if (!state.isRecording) return;
+  const { exportPending } = await chrome.storage.local.get('exportPending');
+  if (exportPending) return;
 
   const captureTarget = state.captureTarget;
   const isScreen = captureTarget === 'screen';
@@ -660,12 +744,21 @@ async function doCapture(meta) {
       source: meta.source || 'manual',
     };
     if (pageUrl) record.pageUrl = pageUrl;
-    if (meta.stepNumber) record.stepNumber = meta.stepNumber;
-    if (meta.actionLabel) record.actionLabel = meta.actionLabel;
+    const normalizedLabel = normalizeProcessActionLabel(record.source, meta.actionLabel);
+    if (normalizedLabel) record.actionLabel = normalizedLabel;
     if (meta.elementInfo) record.elementInfo = meta.elementInfo;
-    list.push(record);
-    await setState({ screenshots: list, lastCaptureError: null });
+
+    let nextList = list;
+    if (captureTarget === 'process') {
+      nextList = finalizeProcessCapture(record, list, meta);
+    } else {
+      list.push(record);
+      nextList = list;
+    }
+
+    await setState({ screenshots: nextList, lastCaptureError: null });
     await chrome.storage.local.set({ lastCaptureSuccessAt: Date.now() });
+    if (captureTarget === 'process') await syncProcessStepCounter();
     await updateBadge();
     ok = true;
   } catch (e) {
@@ -789,6 +882,8 @@ function stopTimer() {
 async function triggerTimerCapture() {
   const { activeTabId: tabId, isRecording, captureTarget, settings } = await getState();
   if (!isRecording) return;
+  const { exportPending } = await chrome.storage.local.get('exportPending');
+  if (exportPending) return;
   if (!wantsTimerForTarget(settings, captureTarget)) return;
   // visible-tab and process modes: route through content script so the
   // green ring and (for process) the step label are produced there.
@@ -800,7 +895,7 @@ async function triggerTimerCapture() {
       // fall through to direct capture
     }
   }
-  captureNow({ source: 'timer' });
+  captureNow({ source: captureTarget === 'process' ? 'process-timer' : 'timer' });
 }
 
 async function restoreOnWake() {
@@ -862,6 +957,15 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       } else if (msg.type === 'DISCARD_SESSION') {
         await discardSession();
         sendResponse({ ok: true });
+      } else if (msg.type === 'PREPARE_EXPORT') {
+        await prepareExport();
+        sendResponse({ ok: true });
+      } else if (msg.type === 'CANCEL_EXPORT') {
+        await cancelExport();
+        sendResponse({ ok: true });
+      } else if (msg.type === 'TOGGLE_RECORDING_SHORTCUT') {
+        await handleToggleCommand();
+        sendResponse({ ok: true });
       } else if (msg.type === 'UPDATE_STEP') {
         await updateStepLabel(msg.id, msg.actionLabel);
         sendResponse({ ok: true });
@@ -880,8 +984,11 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       } else if (msg.type === 'MIGRATE_STEP_IDS') {
         await ensureStepIds();
         sendResponse({ ok: true });
+      } else if (msg.type === 'MANUAL_CAPTURE') {
+        await handleCaptureCommand({ manual: true });
+        sendResponse({ ok: true });
       } else if (msg.type === 'KEYBOARD_CAPTURE_SHORTCUT') {
-        await handleCaptureCommand();
+        await handleCaptureCommand({ manual: false });
         sendResponse({ ok: true });
       } else if (msg.type === 'CAPTURE_NOW') {
         await captureNow({
@@ -921,24 +1028,29 @@ chrome.commands.onCommand.addListener(async (command) => {
       await handleCaptureCommand();
     } else if (command === 'stop-and-save' || command === 'toggle-recording') {
       await handleToggleCommand();
+    } else {
+      console.warn('[QA Tool] unhandled command:', command);
     }
   } catch (e) {
     console.error('[QA Tool] command error:', command, e);
   }
 });
 
-async function handleCaptureCommand() {
+async function handleCaptureCommand({ manual = false } = {}) {
   const now = Date.now();
   if (now - lastKeyboardCaptureAt < KEYBOARD_CAPTURE_DEBOUNCE_MS) return;
   lastKeyboardCaptureAt = now;
 
   await clearStaleCapturePending();
+  const { exportPending } = await chrome.storage.local.get('exportPending');
+  if (exportPending) return;
+
   const { isRecording, activeTabId: tabId, captureTarget, settings } = await getState();
   if (!isRecording) return;
 
   if (captureTarget === 'screen') {
     const st = settings.screenTriggers || settings.triggers || {};
-    if (st.keyboard === false) return;
+    if (!manual && st.keyboard === false) return;
     if (!(await isLauncherWindowOpen())) {
       await chrome.storage.local.set({
         lastCaptureError: 'Screen helper window is closed. Keep it open (minimize is OK) while capturing.',
@@ -955,17 +1067,26 @@ async function handleCaptureCommand() {
       return;
     }
     await flashBadge('…', 500, '#3b82f6');
-    captureNow({ source: 'keyboard' });
+    captureNow({ source: manual ? 'manual' : 'keyboard' });
     return;
   }
 
   if ((captureTarget === 'visible' || captureTarget === 'process') && tabId) {
     try {
-      await chrome.tabs.sendMessage(tabId, { type: 'KEYBOARD_TRIGGER' });
+      await chrome.tabs.sendMessage(tabId, {
+        type: manual ? 'MANUAL_CAPTURE_TRIGGER' : 'KEYBOARD_TRIGGER',
+      });
       return;
     } catch { /* fall through */ }
   }
-  captureNow({ source: 'keyboard' });
+  captureNow({
+    source: captureTarget === 'process'
+      ? (manual ? 'manual' : 'process-keyboard')
+      : (manual ? 'manual' : 'keyboard'),
+    ...(captureTarget === 'process' && manual
+      ? { elementInfo: { label: 'manual', kind: 'manual', text: '', tag: '' } }
+      : {}),
+  });
 }
 
 function defaultFilename() {
@@ -996,15 +1117,25 @@ async function handleToggleCommand() {
   }
   // Start: default to visible-tab mode since the shortcut has no UI to ask.
   try {
+    await chrome.storage.local.remove('lastCaptureError');
     const result = await startRecording('visible');
     if (result && result.pending) {
       // Wouldn't happen for visible mode, but defensive.
       return;
     }
+    await openStepsPanelForActiveTab();
   } catch (e) {
-    console.warn('[QA Tool] toggle-start failed:', e?.message || e);
+    const message = e?.message || String(e);
+    console.warn('[QA Tool] toggle-start failed:', message);
+    await chrome.storage.local.set({ lastCaptureError: message });
     await flashBadge('ERR');
   }
+}
+
+async function openStepsPanelForActiveTab() {
+  const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+  const tab = tabs[0];
+  if (tab) await openStepsPanel(tab.windowId, tab.id);
 }
 
 // Briefly show a temporary badge text, then restore the recording/idle badge.
@@ -1017,6 +1148,31 @@ async function flashBadge(text, holdMs = 1500, bgColor = '#f59e0b') {
 }
 
 // ---------- Lifecycle ----------
+
+async function warnIfShortcutsUnassigned() {
+  try {
+    const commands = await chrome.commands.getAll();
+    const missing = commands.filter((c) => !c.shortcut);
+    if (!missing.length) {
+      await chrome.storage.local.set({ shortcutsNeedSetup: false });
+      return;
+    }
+    await chrome.storage.local.set({ shortcutsNeedSetup: true });
+    await flashBadge('⌨', 6000, '#f59e0b');
+    console.warn(
+      '[QA Tool] Keyboard shortcuts not assigned in Chrome. Open chrome://extensions/shortcuts and set:',
+      missing.map((c) => c.name).join(', '),
+    );
+  } catch { /* ignore */ }
+}
+
+chrome.action.onClicked.addListener(async (tab) => {
+  try {
+    await openStepsPanel(tab.windowId, tab.id);
+  } catch (e) {
+    console.warn('[QA Tool] toolbar click:', e?.message || e);
+  }
+});
 
 chrome.runtime.onInstalled.addListener(async () => {
   const data = await chrome.storage.local.get('settings');
@@ -1031,6 +1187,7 @@ chrome.runtime.onInstalled.addListener(async () => {
       }
     } catch { /* older Chrome */ }
   }
+  await warnIfShortcutsUnassigned();
 });
 
 chrome.tabs.onActivated.addListener(async ({ tabId }) => {

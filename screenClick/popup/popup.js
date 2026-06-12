@@ -3,23 +3,12 @@
 // Apply theme as early as possible to avoid flash of wrong theme on open.
 globalThis.ScreenClickTheme?.applyStoredTheme();
 
-// Platform detection for shortcut display.
-// Chrome maps "Ctrl" → "Cmd" automatically on macOS for the actual binding,
-// but we still need to show the right modifier in the UI.
-const IS_MAC = (() => {
-  const data = navigator.userAgentData;
-  if (data && data.platform) return /mac/i.test(data.platform);
-  return /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent || '');
-})();
+const CAPTURE_SHORTCUT = globalThis.ScreenClickShortcuts?.shortcutLabel('2') || 'Shift-Control+2';
 
-const MOD_KEY_LABEL = IS_MAC ? 'Command' : 'Control';
-const CAPTURE_SHORTCUT = `Shift-${MOD_KEY_LABEL}+2`;
-
-// Populate each shortcut chip with full text like "Shift-Command+1".
 document.querySelectorAll('.shortcut-chip').forEach((el) => {
   const key = el.getAttribute('data-key');
   if (!key) return;
-  el.textContent = `Shift-${MOD_KEY_LABEL}+${key}`;
+  el.textContent = globalThis.ScreenClickShortcuts?.shortcutLabel(key) || `Shift-Control+${key}`;
 });
 
 const els = {
@@ -48,10 +37,12 @@ const DEFAULT_SETTINGS = {
   processOptions: { onlyInteractive: true, debounceMs: 250 },
   timerInterval: 10000,
   screenTimerInterval: 10000,
+  processTimerInterval: 10000,
   imageQuality: 0.8,
 };
 
 let savingPdf = false;
+let popupSession = { isRecording: false, captureTarget: 'visible' };
 let recordingAutoCloseTimer = null;
 let recordingAutoCloseEnabled = false;
 let pointerOverPopup = false;
@@ -149,7 +140,7 @@ function renderTriggers(settings, target) {
       { label: 'Single click on interactive elements', on: p.click },
       { label: 'Form input fill (blur, idle, Enter)', on: p.inputChange },
       { label: `Keyboard (${CAPTURE_SHORTCUT})`, on: p.keyboard },
-      { label: `Timer (every ${Math.round(settings.timerInterval / 1000)}s)`, on: p.timer },
+      { label: `Timer (every ${Math.round((settings.processTimerInterval || settings.timerInterval) / 1000)}s)`, on: p.timer },
     ];
     els.triggerList.innerHTML = items
       .map((i) => `<div class="trigger-item ${i.on ? '' : 'off'}">${i.label}</div>`)
@@ -183,6 +174,8 @@ function renderTriggers(settings, target) {
 
 async function render() {
   const state = await getState();
+  popupSession.isRecording = state.isRecording;
+  popupSession.captureTarget = state.captureTarget;
   renderTriggers(state.settings, state.captureTarget);
 
   const filenameOpen = !els.filenameSection.classList.contains('hidden');
@@ -232,8 +225,16 @@ function clearError() {
   els.errorBanner.textContent = '';
 }
 
+function resetTargetButtons() {
+  document.querySelectorAll('.target-btn').forEach((btn) => {
+    btn.disabled = false;
+    btn.style.opacity = '';
+  });
+}
+
 function showTargetPicker() {
   clearError();
+  resetTargetButtons();
   els.targetPicker.classList.remove('hidden');
   els.primaryActions.classList.add('hidden');
   els.infoPanel.classList.add('hidden');
@@ -251,19 +252,21 @@ function showFilenameInput() {
   els.filenameSection.classList.remove('hidden');
   els.primaryActions.classList.add('hidden');
   els.infoPanel.classList.add('hidden');
+  chrome.runtime.sendMessage({ type: 'PREPARE_EXPORT' }).catch(() => {});
   setTimeout(() => { els.filenameInput.focus(); els.filenameInput.select(); }, 30);
 }
 
 function hideFilenameInput() {
   els.filenameSection.classList.add('hidden');
   els.primaryActions.classList.remove('hidden');
+  chrome.runtime.sendMessage({ type: 'CANCEL_EXPORT' }).catch(() => {});
   render();
 }
 
 els.captureBtn.addEventListener('click', async () => {
   clearError();
   try {
-    await chrome.runtime.sendMessage({ type: 'CAPTURE_NOW', source: 'manual' });
+    await chrome.runtime.sendMessage({ type: 'MANUAL_CAPTURE' });
     setTimeout(render, 400);
   } catch (e) {
     showError(e.message || 'Capture failed.');
@@ -291,11 +294,10 @@ document.querySelectorAll('.target-btn').forEach((btn) => {
         render();
       } else {
         showError((response && response.error) || 'Could not start recording.');
-        btn.disabled = false;
-        btn.style.opacity = '';
       }
     } catch (e) {
       showError(e.message || 'Could not reach extension background.');
+    } finally {
       btn.disabled = false;
       btn.style.opacity = '';
     }
@@ -358,6 +360,11 @@ els.settingsLink.addEventListener('click', (e) => {
 });
 
 globalThis.ScreenClickTheme?.bindThemeToggle(document.getElementById('theme-toggle'));
+
+globalThis.ScreenClickShortcuts?.bindPageShortcuts({
+  allowToggle: () => true,
+  allowCapture: () => popupSession.isRecording && popupSession.captureTarget === 'screen',
+});
 
 chrome.storage.onChanged.addListener((changes, area) => {
   if (area === 'local' && !savingPdf) {

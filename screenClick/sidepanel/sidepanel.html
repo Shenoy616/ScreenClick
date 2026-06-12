@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>ScreenClick — Steps</title>
+  <title>ScreenClick — Session</title>
   <link rel="stylesheet" href="sidepanel.css">
   <script src="../shared/theme.js"></script>
 </head>
@@ -11,12 +11,18 @@
     <div class="panel-title-row">
       <img src="../icons/icon-48.png" alt="" class="panel-icon brand-icon">
       <div>
-        <h1 class="panel-title">Session steps</h1>
+        <h1 class="panel-title">Session screenshots</h1>
         <p class="panel-sub" id="session-meta">Not recording</p>
       </div>
     </div>
     <div class="panel-header-actions">
-      <div class="session-badge hidden" id="recording-badge">Recording</div>
+      <div class="recording-dot hidden" id="recording-badge" role="status" aria-label="Recording" title="Recording"></div>
+      <button type="button" id="header-capture-btn" class="header-icon-btn capture-icon-btn hidden" title="Capture screenshot" aria-label="Capture screenshot">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+          <circle cx="12" cy="13" r="4"/>
+        </svg>
+      </button>
       <button id="theme-toggle" class="theme-toggle" type="button" title="Switch to dark mode" aria-label="Switch to dark mode">
         <svg class="icon-moon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
           <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
@@ -39,34 +45,84 @@
   </div>
 
   <main class="panel-main">
-    <div id="empty-state" class="empty-state">
-      <p class="empty-title">No steps yet</p>
-      <p class="empty-lead">Start a new session below. Each screenshot appears here as a numbered step.</p>
-      <div class="empty-guide" role="img" aria-label="Example: click the Point field on a step to edit it">
+    <div id="empty-state" class="empty-state hidden">
+      <div id="empty-screenshots" class="empty-variant">
+        <div class="empty-illus" aria-hidden="true">
+          <svg width="48" height="48" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <rect x="6" y="10" width="30" height="22" rx="4" stroke="currentColor" stroke-width="2" opacity="0.35"/>
+            <rect x="12" y="16" width="30" height="22" rx="4" fill="var(--card)" stroke="currentColor" stroke-width="2"/>
+            <circle cx="36" cy="22" r="3" fill="currentColor" opacity="0.5"/>
+            <path d="M16 32l6-6 4 4 8-10" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" opacity="0.55"/>
+          </svg>
+        </div>
+        <p class="empty-title">No screenshots yet</p>
+        <p class="empty-lead">Hit <strong>Start recording</strong> below. Each capture appears here as a thumbnail you can reorder before export.</p>
+        <ul class="empty-tips" aria-label="Ways to capture">
+          <li><span class="empty-tip-key">Double-click</span> page (visible tab)</li>
+          <li><span class="empty-tip-key" id="empty-capture-shortcut">^⇧2</span> manual shot</li>
+          <li><span class="empty-tip-key">Timer</span> from Settings</li>
+        </ul>
+        <p class="empty-foot">When you're done, use <strong>Stop &amp; Save PDF</strong></p>
+      </div>
+
+      <div id="empty-process" class="empty-variant hidden">
+        <div class="empty-illus" aria-hidden="true">
+          <svg width="48" height="48" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <circle cx="24" cy="24" r="16" stroke="currentColor" stroke-width="2" opacity="0.35"/>
+            <circle cx="24" cy="24" r="10" fill="var(--card)" stroke="currentColor" stroke-width="2"/>
+            <text x="24" y="28" text-anchor="middle" font-size="12" font-weight="700" fill="currentColor">1</text>
+          </svg>
+        </div>
+        <p class="empty-title">Your step list</p>
+        <p class="empty-lead">Hit <strong>Start recording</strong> below, then click through the page. Each click adds a numbered step here — a Point label plus a screenshot — ready to edit and export.</p>
+        <p class="empty-guide-title">What each step includes</p>
+        <div class="empty-guide" role="img" aria-label="Example step card with step number, Point label, and page screenshot">
+          <article class="empty-guide-card">
+            <div class="step-card-header">
+              <span class="step-badge" aria-hidden="true">1</span>
+              <div class="step-label-wrap empty-guide-field-wrap">
+                <span class="empty-guide-legend">Point</span>
+                <div class="empty-guide-point empty-guide-point--sample" aria-hidden="true">Clicked button: Submit</div>
+              </div>
+            </div>
+            <div class="empty-guide-shot-block">
+              <span class="empty-guide-legend">Screenshot</span>
+              <div class="empty-guide-thumb" aria-hidden="true"></div>
+            </div>
+          </article>
+        </div>
+        <p class="empty-guide-note">Recognized clicks (buttons, links, fields) fill in the Point automatically. Others stay blank so you can add your own note.</p>
+        <p class="empty-foot">Reorder or remove steps anytime · <strong>Stop &amp; Save PDF</strong> when done</p>
+      </div>
+    </div>
+
+    <div id="recording-waiting" class="recording-waiting hidden" role="status" aria-live="polite">
+      <p class="recording-waiting-title">Recording — click the page</p>
+      <p class="recording-waiting-lead">Each click on the page appears here as a numbered step. Start anywhere on the page you are testing.</p>
+      <p class="empty-guide-title">What you'll see</p>
+      <div class="empty-guide" role="img" aria-label="Example step card with step number, Point label, and page screenshot">
         <article class="empty-guide-card">
           <div class="step-card-header">
             <span class="step-badge" aria-hidden="true">1</span>
-            <div class="step-label-wrap">
-              <div class="empty-guide-point" aria-hidden="true">Clicked link: Home</div>
+            <div class="step-label-wrap empty-guide-field-wrap">
+              <span class="empty-guide-legend">Point</span>
+              <div class="empty-guide-point empty-guide-point--empty" aria-hidden="true">Step 1 — add a Point (optional)</div>
             </div>
           </div>
-          <div class="empty-guide-thumb" aria-hidden="true"></div>
+          <div class="empty-guide-shot-block">
+            <span class="empty-guide-legend">Screenshot</span>
+            <div class="empty-guide-thumb" aria-hidden="true"></div>
+          </div>
         </article>
-        <div class="empty-guide-pointer" aria-hidden="true">
-          <svg class="empty-guide-cursor" width="22" height="22" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <path d="M5.5 3.5L18 12.5L11.5 13.5L14.5 20.5L11 22L8 14.5L5.5 15.5L5.5 3.5Z" fill="var(--accent)" stroke="#fff" stroke-width="1.25" stroke-linejoin="round"/>
-          </svg>
-          <span class="empty-guide-callout">Click Point to edit</span>
-        </div>
       </div>
-      <p class="empty-foot">Select steps to reorder · export with <strong>Stop &amp; Save PDF</strong></p>
+      <p class="empty-guide-note">Buttons, links, and fields get an auto label. Unrecognized clicks leave Point blank — tap to describe the action.</p>
     </div>
 
     <div id="target-picker" class="target-picker hidden" aria-label="Choose capture mode">
       <p class="picker-title">Choose what to capture</p>
       <button type="button" class="target-btn" data-target="visible">
         <span class="target-name">Visible Tab</span>
-        <span class="target-desc">Current viewport of the active tab. Click anywhere to capture.</span>
+        <span class="target-desc">Screenshot the active tab on click or shortcut. Reorder or remove before export.</span>
       </button>
       <button type="button" class="target-btn" data-target="process">
         <span class="target-name">Process Record</span>
@@ -74,11 +130,11 @@
       </button>
       <button type="button" class="target-btn" data-target="screen">
         <span class="target-name">Screen or Window</span>
-        <span class="target-desc">Still screenshots of your monitor or an app window. ⌘⇧2 / Ctrl+Shift+2 per shot.</span>
+        <span class="target-desc">Screenshot your monitor or an app window. Ctrl+Shift+2 per shot · reorder or remove before export.</span>
       </button>
     </div>
 
-    <ol id="step-list" class="step-list hidden" aria-label="Captured steps"></ol>
+    <ol id="step-list" class="step-list hidden" aria-label="Captured screenshots"></ol>
   </main>
 
   <div id="panel-dock" class="panel-dock hidden" aria-label="Session actions">
@@ -100,7 +156,7 @@
         <button type="button" id="filename-save" class="panel-btn panel-btn-save">Save PDF</button>
       </div>
     </div>
-    <p class="panel-dock-hint" id="panel-hint">Click a Point to edit · Enter to save · Esc to cancel</p>
+    <p class="panel-dock-hint" id="panel-hint">Reorder or remove screenshots before export</p>
   </div>
 
   <script src="../shared/shortcuts.js"></script>

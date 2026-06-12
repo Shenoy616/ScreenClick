@@ -59,10 +59,10 @@
   --card-hover-bg: var(--surface);
   --card-hover-border: var(--border-strong);
 
-  /* Mode picker — bold terracotta hover */
-  --picker-hover-bg: #edd0c4;
-  --picker-hover-border: #d97757;
-  --picker-hover-ring: rgba(217, 119, 87, 0.38);
+  /* Mode picker — subtle accent hover */
+  --picker-hover-bg: rgba(217, 119, 87, 0.08);
+  --picker-hover-border: rgba(217, 119, 87, 0.32);
+  --picker-hover-ring: rgba(217, 119, 87, 0.14);
 }
 
 html[data-theme="dark"] {
@@ -98,7 +98,7 @@ html[data-theme="dark"] {
   --card-hover-bg: #2a2928;
   --card-hover-border: #403e3a;
 
-  --picker-hover-bg: rgba(217, 119, 87, 0.32);
-  --picker-hover-border: #e08a6f;
-  --picker-hover-ring: rgba(224, 138, 111, 0.45);
+  --picker-hover-bg: rgba(217, 119, 87, 0.14);
+  --picker-hover-border: rgba(224, 138, 111, 0.38);
+  --picker-hover-ring: rgba(224, 138, 111, 0.18);
 }

@@ -67,38 +67,57 @@ body.has-floating-dock .panel-main {
   margin-top: 2px;
 }
 
-.session-badge {
-  font-size: 10px;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  padding: 4px 8px;
-  border-radius: 999px;
-  background: var(--red-soft);
-  color: var(--red);
-  flex-shrink: 0;
-  font-weight: 600;
-}
-
-.session-badge::before {
-  content: "";
-  display: inline-block;
-  width: 6px;
-  height: 6px;
+.recording-dot {
+  width: 10px;
+  height: 10px;
   border-radius: 50%;
   background: var(--red);
-  margin-right: 5px;
-  vertical-align: middle;
-  animation: pulse 1.2s ease-in-out infinite;
+  flex-shrink: 0;
+  box-shadow: 0 0 0 3px var(--red-soft);
+  animation: recording-blink 1.2s ease-in-out infinite;
 }
 
-.session-badge.is-capturing {
-  background: var(--accent-soft);
-  color: var(--accent-dark);
-}
-
-.session-badge.is-capturing::before {
+.recording-dot.is-capturing {
   background: var(--accent-dark);
-  animation: pulse 0.65s ease-in-out infinite;
+  box-shadow: 0 0 0 3px var(--accent-soft);
+  animation: recording-blink 0.65s ease-in-out infinite;
+}
+
+@keyframes recording-blink {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.35; transform: scale(0.88); }
+}
+
+.header-icon-btn {
+  appearance: none;
+  background: var(--card);
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+
+.header-icon-btn:hover:not(:disabled) {
+  background: var(--surface);
+  color: var(--accent-dark);
+  border-color: var(--accent);
+}
+
+.header-icon-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.capture-icon-btn:not(:disabled):hover {
+  background: var(--accent-soft);
 }
 
 .capture-feedback {
@@ -195,9 +214,48 @@ html[data-theme="dark"] .capture-success {
 }
 
 .empty-state {
-  padding: 28px 14px 36px;
+  padding: 20px 14px 28px;
   text-align: center;
   color: var(--text-dim);
+}
+
+.empty-variant {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.empty-illus {
+  color: var(--accent);
+  margin-bottom: 14px;
+  opacity: 0.9;
+}
+
+.empty-tips {
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 6px;
+  margin: 16px auto 0;
+  max-width: 300px;
+}
+
+.empty-tips li {
+  font-size: 11px;
+  line-height: 1.35;
+  color: var(--text-dim);
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 5px 10px;
+  white-space: nowrap;
+}
+
+.empty-tip-key {
+  font-weight: 600;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
 }
 
 .empty-title {
@@ -224,6 +282,51 @@ html[data-theme="dark"] .capture-success {
   color: var(--text);
 }
 
+.empty-guide-title {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  margin: 18px auto 10px;
+  max-width: 280px;
+  width: 100%;
+  text-align: left;
+}
+
+.empty-guide-note {
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text-dim);
+  max-width: 280px;
+  margin: 12px auto 0;
+  text-align: left;
+}
+
+.recording-waiting {
+  padding: 16px 14px 24px;
+  text-align: center;
+  color: var(--text-dim);
+}
+
+.recording-waiting-title {
+  font-weight: 600;
+  color: var(--text);
+  font-size: 15px;
+  margin-bottom: 8px;
+}
+
+.recording-waiting-lead {
+  font-size: 13px;
+  line-height: 1.55;
+  max-width: 34ch;
+  margin: 0 auto;
+}
+
+.recording-waiting .empty-guide-title {
+  margin-top: 20px;
+}
+
 .empty-guide {
   position: relative;
   max-width: 280px;
@@ -242,31 +345,67 @@ html[data-theme="dark"] .capture-success {
 }
 
 .empty-guide-card .step-card-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
   padding: 10px 10px 8px;
+}
+
+.empty-guide-card .step-badge {
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+  font-size: 11px;
+}
+
+.empty-guide-field-wrap {
+  gap: 4px;
+}
+
+.empty-guide-legend {
+  display: block;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--accent);
+  padding-left: 2px;
+}
+
+.empty-guide-shot-block {
+  padding: 0 10px 10px;
+}
+
+.empty-guide-shot-block .empty-guide-legend {
+  margin-bottom: 6px;
 }
 
 .empty-guide-point {
   width: 100%;
   min-height: 36px;
-  border: 1px solid var(--accent);
-  background: var(--card);
-  color: var(--text);
+  border-radius: 8px;
   font-size: 13px;
-  font-weight: 500;
   line-height: 1.45;
   padding: 8px 10px;
-  border-radius: 8px;
-  box-shadow: 0 0 0 3px var(--accent-soft);
-  animation: empty-point-glow 2.4s ease-in-out infinite;
 }
 
-@keyframes empty-point-glow {
-  0%, 100% { box-shadow: 0 0 0 3px var(--accent-soft); }
-  50% { box-shadow: 0 0 0 5px var(--accent-soft), 0 0 12px var(--accent-soft); }
+.empty-guide-point--sample {
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+  font-weight: 500;
+}
+
+.empty-guide-point--empty {
+  border: 1px dashed var(--border);
+  background: var(--card);
+  color: var(--text-dim);
+  font-weight: 400;
+  font-style: italic;
 }
 
 .empty-guide-thumb {
-  margin: 12px 10px 10px;
+  margin: 0;
   height: 52px;
   border-radius: var(--radius-sm);
   border: 1px solid var(--border);
@@ -535,6 +674,23 @@ html[data-theme="dark"] .empty-guide-pointer {
 .step-card.is-selected .step-card-footer,
 .step-card.is-editing-label .step-card-footer {
   display: flex;
+}
+
+.shot-card {
+  cursor: default;
+}
+
+.shot-card .step-shot-wrap {
+  padding: 10px 10px 0;
+}
+
+.shot-card .step-card-footer {
+  display: flex;
+}
+
+.shot-card.is-selected {
+  border-color: var(--border);
+  box-shadow: var(--shadow);
 }
 
 .step-btn {

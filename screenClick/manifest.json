@@ -22,7 +22,6 @@
     "service_worker": "background/service-worker.js"
   },
   "action": {
-    "default_popup": "popup/popup.html",
     "default_icon": {
       "16": "icons/icon-16.png",
       "48": "icons/icon-48.png",
@@ -37,14 +36,14 @@
     "capture-screenshot": {
       "suggested_key": {
         "default": "Ctrl+Shift+2",
-        "mac": "Command+Shift+2"
+        "mac": "Ctrl+Shift+2"
       },
       "description": "Capture screenshot during recording"
     },
     "toggle-recording": {
       "suggested_key": {
         "default": "Ctrl+Shift+1",
-        "mac": "Command+Shift+1"
+        "mac": "Ctrl+Shift+1"
       },
       "description": "Start capturing or stop and save PDF"
     }

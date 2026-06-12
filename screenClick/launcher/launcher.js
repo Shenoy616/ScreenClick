@@ -217,7 +217,7 @@ function notifySessionStarted() {
     }
     if (response && response.ok) {
       setLauncherReady();
-      setStatus('Ready — ⌘⇧2 / Ctrl+Shift+2 or Capture in popup. Keep this window open.');
+      setStatus('Ready — Ctrl+Shift+2 or Capture in the side panel. Keep this window open.');
       if (launcherPort) {
         try {
           launcherPort.postMessage({ type: 'LAUNCHER_STREAM_READY' });
@@ -402,7 +402,7 @@ function onLauncherPortMessage(msg) {
     if (msg.phase === 'start') setStatus('Capturing…');
     else if (msg.phase === 'done') {
       setLauncherReady();
-      setStatus('Saved — ⌘⇧2 / Ctrl+Shift+2 for next. Keep this window open.');
+      setStatus('Saved — Ctrl+Shift+2 for next. Keep this window open.');
     } else if (msg.phase === 'err') {
       setStatus(msg.error || 'Capture failed', true);
     }
@@ -432,12 +432,9 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   return true;
 });
 
-document.addEventListener('keydown', (e) => {
-  if (!streamReady) return;
-  const sc = globalThis.ScreenClickShortcuts;
-  if (!sc || !sc.isCaptureShortcutKey(e)) return;
-  e.preventDefault();
-  sc.requestKeyboardCapture();
-}, true);
+globalThis.ScreenClickShortcuts?.bindPageShortcuts({
+  allowToggle: () => true,
+  allowCapture: () => streamReady,
+});
 
 openDesktopCapturePicker();

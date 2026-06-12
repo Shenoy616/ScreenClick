@@ -1,5 +1,13 @@
 // 16 verticals · category filters · privacy-first role switcher
 
+(function initSiteMeta() {
+  const config = window.SCREENCLICK_SITE || {};
+  const versionEl = document.querySelector('.footer-meta > span:first-child');
+  if (versionEl && config.version && /^v[\d.]+$/.test(versionEl.textContent.trim())) {
+    versionEl.textContent = `v${config.version}`;
+  }
+})();
+
 const CATEGORIES = [
   { id: 'all', label: 'All teams' },
   { id: 'professional', label: 'Enterprise' },
@@ -600,7 +608,7 @@ function fadeText(el, text) {
   if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
 
   const targets = document.querySelectorAll(
-    '.editorial-inner, .install-step, .feature, .vertical-card, .closing-title, .section-title, .vertical-spotlight, .compare-table-wrap, .section-sub, .privacy-card, .privacy-architecture, .privacy-hero-badge'
+    '.editorial-inner, .install-step, .feature, .vertical-card, .closing-title, .section-title, .vertical-spotlight, .compare-table-wrap, .section-sub, .privacy-card, .privacy-architecture'
   );
 
   targets.forEach((el) => {

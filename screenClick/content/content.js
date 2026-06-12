@@ -2,7 +2,7 @@
 //   - mouse tracking (keyboard trigger ring position)
 //   - single-click trigger (visible-tab mode)
 //   - single-click trigger and form-input trigger (process-record mode)
-//   - green click ring rendering with element label
+//   - green click pointer rendering with element label
 //   - on-page recording dot (blinks while capturing)
 //   - full-page scroll orchestration for fullpage mode
 
@@ -12,6 +12,7 @@
 
   const STATE = {
     isRecording: false,
+    exportPending: false,
     captureTarget: 'visible',
     triggers: { click: true, keyboard: false, timer: false },
     lastVisibleClickAt: 0,
@@ -35,6 +36,7 @@
   function applyRecordingPayload(data) {
     const wasRecording = STATE.isRecording;
     STATE.isRecording = !!data.isRecording;
+    STATE.exportPending = !!data.exportPending;
     STATE.captureTarget = data.captureTarget || 'visible';
     const s = data.settings || {};
     const raw = s.triggers || {};
@@ -74,14 +76,14 @@
 
   async function refreshState() {
     try {
-      const data = await chrome.storage.local.get(['isRecording', 'settings', 'captureTarget']);
+      const data = await chrome.storage.local.get(['isRecording', 'settings', 'captureTarget', 'exportPending']);
       applyRecordingPayload(data);
     } catch {}
   }
 
   try {
     chrome.storage.onChanged.addListener((changes, area) => {
-      if (area === 'local' && (changes.isRecording || changes.settings || changes.captureTarget)) {
+      if (area === 'local' && (changes.isRecording || changes.settings || changes.captureTarget || changes.exportPending)) {
         refreshState();
       }
     });
@@ -132,8 +134,9 @@
   }
 
   async function triggerCapture(x, y, source, extra = {}) {
-    if (!STATE.isRecording) return;
-    if (STATE.captureTarget === 'visible' || STATE.captureTarget === 'process') {
+    if (!STATE.isRecording || STATE.exportPending) return;
+    const skipRing = source === 'timer' || source === 'process-timer';
+    if ((STATE.captureTarget === 'visible' || STATE.captureTarget === 'process') && !skipRing) {
       await drawRing(x, y);
     }
     try {
@@ -153,7 +156,7 @@
   // ---------- Visible-tab single-click ----------
 
   document.addEventListener('click', (e) => {
-    if (!STATE.isRecording || STATE.captureTarget !== 'visible') return;
+    if (!STATE.isRecording || STATE.exportPending || STATE.captureTarget !== 'visible') return;
     if (!STATE.triggers.click) return;
     if (e.target?.closest?.('.qa-click-ring, .qa-recording-indicator')) return;
     const now = Date.now();
@@ -229,7 +232,7 @@
   }
 
   document.addEventListener('click', (e) => {
-    if (!STATE.isRecording) return;
+    if (!STATE.isRecording || STATE.exportPending) return;
     if (STATE.captureTarget !== 'process') return;
     if (!STATE.processTriggers.click) return;
 
@@ -245,9 +248,7 @@
       if (STATE.processTriggers.inputChange && isTextInput(clickTarget)) return;
 
       const info = describeElement(labelTargetFor(clickTarget));
-      STATE.stepCounter++;
       const payload = {
-        stepNumber: STATE.stepCounter,
         elementInfo: info,
       };
       if (hasMeaningfulPoint(info)) {
@@ -261,17 +262,13 @@
     const link = findLinkElement(e.target);
     if (link) {
       const info = describeElement(link);
-      STATE.stepCounter++;
-      const payload = { stepNumber: STATE.stepCounter, elementInfo: info };
+      const payload = { elementInfo: info };
       if (hasMeaningfulPoint(info)) payload.actionLabel = `Clicked ${info.label}`;
       triggerCapture(e.clientX, e.clientY, 'process-click', payload);
       return;
     }
 
-    STATE.stepCounter++;
-    triggerCapture(e.clientX, e.clientY, 'process-click', {
-      stepNumber: STATE.stepCounter,
-    });
+    triggerCapture(e.clientX, e.clientY, 'process-click', {});
   }, true);
 
   // ---------- Process Record: input fill ----------
@@ -293,7 +290,7 @@
   }
 
   function captureInputFill(el, reason) {
-    if (!el) return;
+    if (!el || STATE.exportPending) return;
     const key = fieldKey(el);
     const session = STATE.inputSessions[key];
     if (!session) return;
@@ -308,7 +305,6 @@
     }
 
     const info = describeElement(el);
-    STATE.stepCounter++;
     const rect = el.getBoundingClientRect();
     const cx = rect.left + rect.width / 2;
     const cy = rect.top + rect.height / 2;
@@ -323,7 +319,6 @@
     const fieldName = info.text || info.label.replace(/^(input|text area|dropdown|button):\s*/, '') || 'field';
 
     triggerCapture(cx, cy, 'process-input', {
-      stepNumber: STATE.stepCounter,
       actionLabel: `Filled "${fieldName}" with: ${preview}`,
       elementInfo: info,
     });
@@ -371,22 +366,50 @@
     captureInputFill(el, 'blur');
   }, true);
 
-  // Screen mode: listen for capture shortcut in the page (chrome.commands is flaky
-  // when focus is outside the side panel / extension UI).
+  // Page-level shortcut listeners — chrome.commands can miss keystrokes when a tab has focus.
   document.addEventListener('keydown', (e) => {
     if (window !== window.top) return;
-    if (!STATE.isRecording || STATE.captureTarget !== 'screen') return;
-    if (!STATE.screenTriggers.keyboard) return;
     const sc = globalThis.ScreenClickShortcuts;
-    if (!sc || !sc.isCaptureShortcutKey(e)) return;
+    if (!sc) return;
     if (sc.isEditableTarget(e.target)) return;
-    e.preventDefault();
-    e.stopPropagation();
-    sc.requestKeyboardCapture();
+
+    if (sc.isToggleShortcutKey(e)) {
+      e.preventDefault();
+      e.stopPropagation();
+      sc.requestToggleRecording();
+      return;
+    }
+
+    if (!STATE.isRecording || STATE.exportPending) return;
+
+    if (!sc.isCaptureShortcutKey(e)) return;
+
+    if (STATE.captureTarget === 'screen') {
+      if (!STATE.screenTriggers.keyboard) return;
+      e.preventDefault();
+      e.stopPropagation();
+      sc.requestKeyboardCapture();
+      return;
+    }
+
+    if (STATE.captureTarget === 'visible') {
+      if (!STATE.triggers.keyboard) return;
+      e.preventDefault();
+      e.stopPropagation();
+      sc.requestKeyboardCapture();
+      return;
+    }
+
+    if (STATE.captureTarget === 'process') {
+      if (!STATE.processTriggers.keyboard) return;
+      e.preventDefault();
+      e.stopPropagation();
+      sc.requestKeyboardCapture();
+    }
   }, true);
 
   document.addEventListener('keydown', (e) => {
-    if (!STATE.isRecording || STATE.captureTarget !== 'process') return;
+    if (!STATE.isRecording || STATE.exportPending || STATE.captureTarget !== 'process') return;
     if (!STATE.processTriggers.inputChange) return;
     if (e.key !== 'Enter') return;
     const el = e.target;
@@ -691,12 +714,9 @@
         const wantsIt = STATE.captureTarget === 'process'
           ? STATE.processTriggers.keyboard
           : STATE.triggers.keyboard;
-        if (STATE.isRecording && wantsIt) {
+        if (STATE.isRecording && !STATE.exportPending && wantsIt) {
           if (STATE.captureTarget === 'process') {
-            STATE.stepCounter++;
             triggerCapture(STATE.lastMouse.x, STATE.lastMouse.y, 'process-keyboard', {
-              stepNumber: STATE.stepCounter,
-              actionLabel: `Manual step ${STATE.stepCounter}`,
               elementInfo: { label: 'manual', kind: 'manual', text: '', tag: '' },
             });
           } else {
@@ -704,16 +724,24 @@
           }
         }
         sendResponse({ ok: true });
+      } else if (msg.type === 'MANUAL_CAPTURE_TRIGGER') {
+        if (STATE.isRecording && !STATE.exportPending) {
+          if (STATE.captureTarget === 'process') {
+            triggerCapture(STATE.lastMouse.x, STATE.lastMouse.y, 'manual', {
+              elementInfo: { label: 'manual', kind: 'manual', text: '', tag: '' },
+            });
+          } else {
+            triggerCapture(STATE.lastMouse.x, STATE.lastMouse.y, 'manual');
+          }
+        }
+        sendResponse({ ok: true });
       } else if (msg.type === 'TIMER_TRIGGER') {
         const wantsIt = STATE.captureTarget === 'process'
           ? STATE.processTriggers.timer
           : STATE.triggers.timer;
-        if (STATE.isRecording && wantsIt) {
+        if (STATE.isRecording && !STATE.exportPending && wantsIt) {
           if (STATE.captureTarget === 'process') {
-            STATE.stepCounter++;
             triggerCapture(STATE.lastMouse.x, STATE.lastMouse.y, 'process-timer', {
-              stepNumber: STATE.stepCounter,
-              actionLabel: `Periodic step ${STATE.stepCounter}`,
               elementInfo: { label: 'timer', kind: 'timer', text: '', tag: '' },
             });
           } else {
@@ -737,6 +765,7 @@
           isRecording: msg.isRecording,
           captureTarget: msg.captureTarget,
           settings: msg.settings,
+          exportPending: msg.exportPending,
         });
         sendResponse({ ok: true });
       } else {
